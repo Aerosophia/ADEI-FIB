@@ -10,14 +10,14 @@ The case study encompasses three primary deliverables, culminating in a final su
 Aim is to predict how much you should sell your old car. It involves a numeric outcome. As a secondary objective, given car characteristics you will have to predict if it refers to an Audi car.
 
 
-- **[Deliverable 1](https://github.com/Aerosophia/ADEI-FIB/tree/main/D1 "Deliverable 1")**: EDA and data qaulity
-- **[Deliverable 2](https://github.com/Aerosophia/ADEI-FIB/tree/main/D2 "Deliverable 2")**: PCA, CA, MCA and diverse Clustering thechniques.
+- **[Deliverable 1](https://github.com/Aerosophia/ADEI-FIB/tree/main/D1 "Deliverable 1")**: EDA and data quality
+- **[Deliverable 2](https://github.com/Aerosophia/ADEI-FIB/tree/main/D2 "Deliverable 2")**: PCA, CA, MCA and diverse Clustering techniques.
 - **[Deliverable 3](https://github.com/Aerosophia/ADEI-FIB/tree/main/D3 "Deliverable 3")**: Predictive models building.
 
 ### Final Conclusions:
 
 - **[Final Document:](https://github.com/Aerosophia/ADEI-FIB/blob/main/Final/SoukainaMahboubMehboub-DelFinalRmd.pdf )** This document englobes all the steps from initial data exploratory analysis to model building with more details.
-- **[Final Presentation Slides:](https://github.com/Aerosophia/ADEI-FIB/blob/main/Final/CaseStudy-Presentation.pptx "Final Presentation Slides:")** Case Study conclusions - PPT file.
+- **[Final Presentation Slides:](https://github.com/Aerosophia/ADEI-FIB/blob/main/Final/CaseStudy-Presentation.pptx)** Case Study conclusions - PPT file.
 
 **Credits: ** Soukaïna Mahboub Mehboub  (@Aerosophia)
 **Contact:** soukaina.mahboub@estudiantat.upc.edu
