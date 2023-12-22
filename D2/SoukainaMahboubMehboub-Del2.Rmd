@@ -1,0 +1,861 @@
+---
+title: "Deliverable II:  PCA, K-Means, Hierarchical Clustering, CA and MCA"
+author: "Soukaïna Mahboub Mehboub"
+date: "November 26th, 2023"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+  pdf_document:
+    latex_engine: xelatex
+    toc: TRUE
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+setwd("C:/Users/Soukaïna/Desktop/ADEI/D2") 
+filepath<-"C:/Users/Soukaïna/Desktop/D2"
+load("WorkspaceD2.RData")
+```
+
+# 1. Principal Component Analysis
+
+## 1.1 Eigenvalues and dominant axes analysis:
+
+We are asked to perform a PCA taking into account also supplementary that can be quantitative and/or categorical.
+
+We previously applied imputation on our dataframe, and now will apply PCA, passing all categorical/factor variable as qualitative supplementary variables, and pass the target variable "price" is our quantitative supplementary variable. We will also pass the detected multivariant outliers as supplementary individuals to avoid any anomalies.\
+
+We deduce from the following graph of variables and the results:
+
+-   The two first dimensions explain the 70% of inertia.
+
+-   The first component agglutinates 40,8% of variability meanwhile the second component has 30% of variability. We can sense that more than two\--thirds of the variability are already inside the first and second component.
+
+-   The variables "mileage", "year" and "price" have a significant impact on the first component, meanwhile "tax" and "engineSize" have an important effect on the second component.
+
+-   The variable "mpg" has an insignificant impact on both component compared to the rest.
+
+-   "mileage" and "year" are negatively correlated.
+
+```{r}
+
+library(FactoMineR)
+res.pca<-FactoMineR::PCA(df, quali.sup=c(1,4,6,10:17), quanti.sup= c(3), ind.sup = mouts)
+
+```
+
+-   The following graph shows the relationship between individuals with the two axes. Proximity of points in the scatter plot indicates similarity between individuals. Individuals closer together are more similar in terms of the variables used in the analysis.
+
+-   In our case, we can spot graphically few individuals that do not follow the common pattern (11053 as an example). But we have many individuals that contribute almost equally to the inertia of each component.
+
+-   For example individuals with a model type "Audi-R8" contributes in the variability of the second dimension more than it does in the first component.
+
+```{r}
+plot.PCA(res.pca,choix=c("ind"),invisible=c("ind"))
+
+
+```
+
+-   As we can see below, 6 components have been created. The choice of retaining the most informative axes in a PCA analysis can be made using various methods, including but not limited to the Kaiser criterion and the Elbow method. These approaches assist in determining the optimal number of principal components to capture and retain, contributing to a more robust interpretation of the underlying patterns in the data.
+
+**Kaiser Criteria:**
+
+-   The PCA function yields an eigenvector with normalized eigenvalues. Employing the Kaiser criterion, we opt to retain the first two components, given that their eigenvalues surpass the mean of all components' eignevalues, in our case 0.8.
+
+-   The two first componenets meet this criteria and have 70.79% of cumulative percentage of variance. This strategic selection ensures a focused representation of the data's principal components, enhancing the interpretability of the analysis.
+
+```{r}
+res.pca$eig
+```
+
+```{r}
+barplot(res.pca$eig[,1],main="Eigenvalues",names.arg=paste("dim",1:nrow(res.pca$eig)))
+```
+
+**Elbow Method:**
+
+-   The following graph shows the Eignevalues in a downward curve, from highest to lowest, and by using the Elbow Method we can determine the number of significant axes in this case, we would retain 3 axes.
+
+-   The three components englobe 86,4% of the information.
+
+```{r}
+library("factoextra")
+fviz_eig(res.pca, addlabels = TRUE)
+```
+
+## 1.2 Interpreting the axes: Variables point of view coordinates, quality of representation, contribution of the variables:
+
+**Variables Coordinates:**
+
+-   The values in this matrix indicate the strength of the relationship between each variable and the principal components through coordinates values. Notably, the first principal component (Dim.1) exhibits a strong correlation with the 'year' and 'mileage' variables. This also implies that Dim.1 captures information variability related to the year and mileage of the vehicles. Additionally, the second principal component (Dim.2) shows a notable positive correlation with 'tax' and 'engineSize,' while being negatively correlated with 'mpg.'
+
+```{r}
+res.pca$var$cor
+```
+
+**Quality of representation:**
+
+-   To measure the quality of representation of each variable on the principal components we use the squared cosines. It provides insights into how well each variable is represented in the reduced-dimensional space created by the principal components.
+
+-   In the first dimension, both "year" and "mileage" exhibit strong representation, indicating that they play a substantial role in shaping this principal component. Conversely, "tax" contributes minimally, accounting for only 1% of the representation in this specific dimension. This insight underscores the differential impact of these variables on the overall structure captured by the principal components, emphasizing the significance of "year" and "mileage" in this particular dimension.
+
+-   When it comes to the second dimension, "tax," "mpg," and "engineSize" showcase some representation, contributing to the structure of the second principal component. However, it's important to note that "year" and "mileage" have limited influence in this specific dimension.
+
+```{r}
+res.pca$var$cos2[,1:2]
+```
+
+**Contribution of variables:**
+
+-   Analyzing variable contributions provides insights into which variables strongly influence the selected axes. This information aids in interpreting the meaning of each dimension and helps focus on key variables.
+
+```{r}
+res.pca$var$contrib[,1:2]
+```
+
+-   In the context of the first principal component, it's evident that "year" and "mileage" exhibit the highest contributions, aligning with our earlier observation from squared cosines. Conversely, "tax" and "engine size" make minimal contributions, indicating their limited impact on this principal component.
+
+-   Regarding the second principal component, "tax" and "engine size" are contributing more significantly compared to other variables. In contrast, "year" and "mileage" show comparatively lower contributions, underscoring their reduced influence on the second principal component. This also matches with previous result we got during the quality representations of variables.
+
+To double-check our earlier findings, we can examine the correlation between each variable and the principal components. This additional step ensures consistency with our previous results:
+
+```{r}
+res.des<-dimdesc(res.pca)
+res.des$Dim.1$quanti
+```
+
+## 1.3 Individuals point of view
+
+Individual analysis in PCA is crucial for understanding how each observation or individual contributes to the overall variation in the dataset and how they are positioned in the reduced-dimensional space defined by the principal components.
+
+**Coordinates analysis:**
+
+-   These coordinates express the position of each individual in the reduced-dimensional space created by the principal components. Examining these coordinates helps in visualizing the distribution of individuals in the PCA plot and understanding the relationships and patterns in the data captured by the principal components.
+
+-   Examining the top records based on Dim.1 reveals that individuals with IDs 44400, 39750, and 9823 have notably high positive scores on this component. This suggests that these individuals contribute significantly to the variance captured by Dim.1. On the other hand, reviewing the top records based on Dim.2, individuals with IDs 31494, 30583, and 7446 exhibit high positive values, indicating their substantial influence on the variability captured by Dim.2. Conversely, individual 7884 stands out with a high positive value on Dim.2 but in the opposite direction.
+
+```{r}
+head(res.pca$ind$coord[order(-res.pca$ind$coord[, 1]), 1:2])
+```
+
+```{r}
+head(res.pca$ind$coord[order(-res.pca$ind$coord[, 2]), 1:2])
+```
+
+**Quality of representation:**
+
+-   Analyzing the top records based on Dim.1 squared cosines, it is evident that individuals with IDs 45095, 45035, and 15725 have extremely high values close to 1. This indicates a strong and accurate representation of these individuals along Dim.1. Similarly, reviewing the top records based on Dim.2 squared cosines, individuals 17858, 12277, and 10417 exhibit high values close to 1, signifying an excellent representation along Dim.2.
+
+```{r}
+head(res.pca$ind$cos2[order(-res.pca$ind$cos2[, 1]), 1:2])
+```
+
+```{r}
+head(res.pca$ind$cos2[order(-res.pca$ind$cos2[, 2]), 1:2])
+```
+
+**Contribution of individuals:**
+
+-   Analyzing the top records based on Dim.1 contributions, it is notable that individuals with IDs 44400, 39750, and 9823 have the highest contributions to the variability along Dim.1. In particular, individual 44400 stands out with a substantial contribution of approximately 29.1%, emphasizing its significant role in explaining the variance along Dim.1. Similarly, reviewing the top records based on Dim.2 contributions, individuals 31494, 30583, and 7446 exhibit the highest contributions, suggesting their prominent influence on the variability captured by Dim.2.
+
+```{r}
+head(res.pca$ind$contrib[order(-res.pca$ind$contrib[, 1]), 1:2])
+```
+
+```{r}
+head(res.pca$ind$contrib[order(-res.pca$ind$contrib[, 2]), 1:2])
+
+```
+
+**Analyzing 6 individuals that have a significant contribution to the first component:**
+
+-   This results matches the outcome of the variable analysis we did previously, where we concluded that mileage and year are the variables that contributed more in the first component.
+
+-   Its observed that cars that mostly contributed to the first component have a really high mileage and and their year is very far so they are very old.
+
+```{r}
+df[which(row.names(df) %in% c(39721 , 18027 , 49012, 9823, 39750, 44400 )), ]
+```
+
+# 2 K-Means Classification:
+
+## 2.1 Optimal Number of Clusters:
+
+-   At this point, after applying the PCA, and retaining the the first and second axes based on Kaiser Criteria we will process with clustering our data by using K-Means:
+
+```{r}
+res.pca<-FactoMineR::PCA(df, quali.sup=c(1,4,6,10:17), quanti.sup= c(3),  ind.sup = mouts, graph = FALSE)
+ppcc<-res.pca$ind$coord[,1:2] # 2 components principals (based on kaiser criteria)
+dim(ppcc)
+
+```
+
+-   Using the elbow method we can expect that the optimal number of cluster is 5, as the graph shows that the total of within sum of square starts to slow down.
+
+```{r}
+#Optimal number of clusters
+library("factoextra")
+fviz_nbclust(ppcc, kmeans, method = "wss")
+```
+
+-   To understand how the K-means Algorithm was used with 5 clusters, we can see in which iteration it starts to converge, in our case it was in the 4th iteration.
+
+```{r}
+dist<-dist(ppcc) # coordenates are real - Euclidean metric
+kc<-kmeans(dist,5,iter.max=30,trace=TRUE) 
+```
+
+-   As we set the number of clusters at 5, we can display the number of observations in each cluster as follows:
+
+```{r}
+barplot(table(factor(kc$cluster)),main= " Number of observations per cluster")
+```
+
+## 2.2 Clustering Quality:
+
+-   The next chunk shows the quality of clustering. 77.84% is a higher percentage that suggests good and meaningful separation of clusters, indicating that the clustering is explaining a significant portion of the variance in the data.
+
+    ```{r}
+    100*(kc$betweenss/kc$totss)
+    ```
+
+## 2.3 Clusters Description:
+
+-   We will proceed with describing and analyzing each cluster.
+
+-   We will assign to each individual in our original datafram with its own K-Means Cluster number. We are not considering Any Multivariant Outliers to avoid anomalies.
+
+```{r}
+df<-df[-mouts,] # We use a dataframe without Multivariant Outliers.
+df$claKM<-kc$cluster
+df$claKM<-factor(df$claKM)
+
+#res.cat <-catdes(df,18) #!8 is claKM  variables, representing each individuals corresponding cluster.
+```
+
+### 2.3.1 **Description of clusters in relation with catgorical variables:**
+
+-   As we can see below (Please check [7. Annex:], as the output was very long), we find some categorical variables and factor very related to the cluster variable that we recently created. The low p-values show evidence how some variables have been significant to cluster our data.
+
+-   Regarding the first cluster, 78,78% are not Audi cars, 68,09% of the individuals are categorized as "**`Low-Tax`**", 50,52% are categorized as "Medium Engine-size" and 56,48% have Diesel as Fuel-Type. Cluster 1 exhibits a distinct profile characterized by a prevalence of newer cars (**`2019`** and **`2020`** models) with **`low`** taxation, **`moderate`** mpg, and **`moderate`** pricing. Specific models like **`VW-T-Cross`** and **`VW-T-Roc`** show a perfect association with this cluster. Conversely, **`very old`** category as mpg, **`low-price`** cars, and certain models like **`BMW-X6`** and **`BMW-M3`** are notably absent.
+
+-   When it comes to Cluster 2: 83.71% of the cars in this cluster sample, were labelled as **`Low-MPG`**, 80,34% are labelled as `Expensive` and 73,27% have **`Large Engine-size`**. This make sense as cars with large engine size and low mpg are meant to be expensive. Cluster 2 is characterized by several distinct features. It has a strong association with low fuel efficiency (**`f.mpg=Low`**), expensive pricing (**`f.price=Expensive`**), and large engine sizes (**`f.engineSize=Large`**). Specific car models such as VW Touareg, Audi Q7, and BMW M4 are highly prevalent in this cluster. Vehicles in this cluster often have **`new`** or **`nearly new`** caracterisitcs. (**`f.miles=New/Nearly New`**). The presence of semi-automatic transmissions (**`transmission=f.Trans-SemiAuto`**) is also notable.
+
+    Moreover, the cluster exhibits preferences for specific years, especially 2019 (**`f.year=2019`**). High tax rates (**`f.tax=High`**) and certain fuel types like Petrol (**`fuelType=Petrol`**) are significant features. Luxury brands such as BMW and Mercedes-Benz are well-represented in this cluster. Additionally, there is a prevalence of diesel fuel type (**`fuelType=Diesel`**) and hybrid fuel type (**`fuelType=Hybrid`**).
+
+    Overall, Cluster 2 gathers expensive, fuel-inefficient vehicles with large engine sizes, especially those from luxury brands.
+
+-   Cluster 3: 70% are **`Low Tax`**, 27,92% have small Engine-Size Type, and 50,52% have a **`medium Engine-Size`**, 56,48 are **`Diesel`** in Fuel-type and 41,89% are **`Petrol`** cars, an d around 3 quarters fall in the catgegories combined "**`Used`**", "**`Old`**" and "**`Very Old`**", this also makes sense with the previous stated categories.
+
+    Cluster 3 is characterized by older vehicles (**`f.miles=Old`**) and an emphasis on specific years, notably 2017 and 2016 (**`f.year=2017`**, **`f.year=2016`**). High fuel efficiency (**`f.mpg=High`**) and affordability (**`f.price=Affordable`**) are prominent features. This cluster also includes manual transmissions (**`transmission=f.Trans-Manual`**) and smaller engine sizes (**`f.engineSize=Small`**). Noteworthy associations involve manufacturers like VW and specific models such as VW Polo.
+
+    Overall, this cluster represents a distinct group with a focus on older, fuel-efficient, and affordable vehicles.
+
+-   Cluster 4 exhibits distinctive features such as very old vehicles (**`f.miles=Very Old`**) and low-priced options (**`f.price=Low-priced`**), both strongly associated with the cluster. The statistical significance is evident with low p-values, notably for variables like **`f.miles=Very Old`** (p=0.0). Specific manufacturers (**`manufacturer=Mercedes`**, **`manufacturer=BMW`**) and models (**`model=VW- Passat`**, **`model=BMW- 1 Series`**) contribute significantly.
+
+-   Cluster 5 is characterized by high tax rates (**`f.tax=High`**) and a preference for very old vehicles (**`f.miles=Very Old`**). Large engine sizes (**`f.engineSize=Large`**) and low fuel efficiency (**`f.mpg=Low`**) are notable features. The cluster is associated with specific years, especially 2011 and 2009 (**`f.year=2011`**, **`f.year=2009`**). Automatic transmissions (**`transmission=f.Trans-Automatic`**) and moderate fuel efficiency (**`f.mpg=Moderate`**) are also prevalent. This cluster includes luxury models like Mercedes-M Class and Audi Q5. Notably, the presence of **`Audi Yes`** indicates a distinction for Audi vehicles. Overall, Cluster 5 represents a group with a focus on high tax rates, older vehicles, and larger engine sizes.
+
+### 2.3.2 **Description of clusters in relation with numerical variables:**
+
+-   In Cluster 1, the average price is 16190.02, which is lower than the overall mean of 21,600. These cars have a lower tax rate of 143.09 compared to the overall mean of 146.92. The engine size is smaller, with an average of 1.71, and the fuel efficiency (MPG) is slightly higher at 59.97. The mileage is relatively higher, with an average of 26134 These results match with the cluster description with categorical variables which makes sense. This cluster gathers mainly low tax cars with low prices small engine sizes.
+
+-   Cluster 2 is characterized by cars with an average engine size (1.84) and lower-than-average prices (11786). The tax rate is slightly lower than the overall mean at 146.92. Mileage is higher (54501), and the fuel efficiency (MPG) is higher 62.68.
+
+-   Cluster 3 includes cars with lowe fuel efficiency (MPG) at 42.59 and high mileage, around 52520. Tax rates are higher than average at 180.35, and the engine size is bigger (2.59). The average price is 16,190, significantly lower than the overall mean.
+
+-   Cluster 4 consists of cars with very low mileage (7013.41), slightly low fuel efficiency (MPG) at 48.79, and a relatively small engine size (1.73). Tax rates are low at 145.53, and prices are a bit higher than average.
+
+-   Cluster 5 features cars with a an average tax rate, very low mileage (11669.23), and big engine sizes (2.71). Fuel efficiency (MPG) is low at 37.56, and prices are significantly higher than the overall mean.
+
+# 3 Hierarchical Clustering:
+
+## 3.1 Number of Clusters :
+
+-   As we observe below, using HCPC, has implicitly detected the optimal number of clusters through the inertia gain barplot, in this case we have three clusters. The quality of this partition is around 41.08%, so we will try to increase it.
+
+```{r warning=FALSE}
+res.hcpc <- HCPC(res.pca,nb.clust = -1, order = TRUE)
+((res.hcpc$call$t$within[1]-res.hcpc$call$t$within[3])/
+res.hcpc$call$t$within[1])*100
+```
+
+## 3.2 Clustering Quality:
+
+We will try now with 5 clusters:
+
+-   As we can see the quality of partition has now increased to 55.55%, in case if we want to achieve a quality of 80%, we need 16 clusters at least. In our study, we will keep data in 5 cluster to facilitate the process of study, comparison and analysis.
+
+```{r}
+res.hcpc <- HCPC(res.pca,nb.clust = 5, order = TRUE)
+((res.hcpc$call$t$within[1]-res.hcpc$call$t$within[5])/
+res.hcpc$call$t$within[1])*100
+```
+
+-   We can visualize hos many individuals has each cluster:
+
+    ```{r}
+    table(res.hcpc$data.clust$clust)
+    barplot(table(res.hcpc$data.clust$clust), main = "Number of individuals per cluster")
+    ```
+
+## 3.3 Clusters Description:
+
+-   We will assign to each individual of our dataframe the number of its cluster.
+
+    ```{r include=FALSE}
+    df$claH<-0
+    df$claH<-res.hcpc$data.clust$clust
+    df$claH<-factor(df$claH)
+
+
+    ```
+
+### 3.3.1 **Description of clusters in relation with categorical variables:**
+
+-   Description of each cluster in relation with other categorical/factor variables, please check [7. Annex:] for the following output.
+
+    ```{r include=FALSE}
+    res.hcpc$desc.var$category
+    ```
+
+    -   Notably, Cluster 1 (Cla/Mod) exhibits a strong association with cars from the year 2019, emphasizing a preference for new or nearly new vehicles. Characteristics such as low mileage (**`f.miles=New/Nearly New`**), moderate fuel efficiency (**`f.mpg_Moderate`**), and an inclination towards expensive cars (**`f.price=Expensive`**) contribute to the distinctive profile of this cluster. Additionally, there is a notable dominance of Volkswagen (**`manufacturer=VW`**) models, particularly VW-T-Roc and VW-T-Cross. Transmission type (**`f.Trans-SemiAuto`**) and medium engine size (**`f.engineSize_Medium`**) These cars often have **`low`** tax rates and run on **`petrol`**.
+
+    -   In Cluster 2, the analysis reveals a distinct automotive profile. Cars with **`large engine size`**, specifically the BMW M4 and Mercedes GLS Class, dominate, showcasing a 100% modulation score. High-end features like **`expensive`** pricing, **`low`** fuel efficiency (mpg), and **`semi-automatic`** transmissions are strongly associated. Notably, the VW Touareg, Audi Q7, BMW M4, and Mercedes GLS Class are the top contributing models. **`Diesel`** fuel types and **`manual transmissions`** play a significant role. **`BMW`** and **`Mercedes`** emerge as the primary manufacturers, especially in the year **`2019`** with **`New/Nearly New`** based on mileage. **`High tax`** brackets and **`expensive`** pricing align with this cluster, emphasizing luxury and performance in vehicle characteristics.
+
+    -   Cluster 3 reflects a car segment characterized by specific features. **`Old`** vehicles with **`high`** mileage dominate. Cars with very **`high`** fuel efficiency (mpg) are prevalent. The year **`2017`** and **`2016`** stand out, indicating a preference for recent models. **`Affordable`** and **`low-priced`** options are significant, aligning with a budget-conscious consumer base. **`Manual transmissions`** and **`small`** engine sizes are notable features. **`Diesel`** fuel types are prevalent. The VW Polo emerges as a popular model, epitomizing the practical and efficient characteristics of this cluster.
+
+    -   Cluster 4 represents a distinct car segment characterized by specific attributes. **`High tax`** rates are a defining feature, suggesting a preference for luxury or high-performance vehicles. **`Moderate fuel efficiency`** (mpg) is observed, indicating a balance between performance and economy. **`Very old`** cars are significant in this cluster. The Audi Q5 and BMW X5 emerge as prominent models. The year **`2015`** stands out, reflecting a preference for relatively recent models. **`Large engine sizes`** are notable. Low fuel efficiency (**`Low mpg`**) and **`high prices`** characterize this cluster, aligning with a segment that values performance and luxury over fuel economy and affordability.
+
+    -   Cluster 5 is characterized by **`very old`**, **`low-priced`** cars with model years **`2013`**-**`2015`**, **`high`** tax rates, and a preference for **`diesel`** fuel. These cars exhibit very **`high`** fuel efficiency (mpg) and often feature **`manual transmissions`**. Prominent models include Audi A6, BMW 5 Series, and Mercedes SLK, reflecting diversity in manufacturers. The cluster encompasses a mix of **`diesel`** and **`petrol`** fuel types, various transmission preferences, and a range of budget options. Cars from both **`used`** and **`new/nearly new`** categories contribute to this cluster, highlighting a diverse set of preferences.
+
+### 3.3.2 **Description of clusters in relation with numerical variables:**
+
+-   Now we will proceed to describe the relationship between numerical variables and these hierarchical clusters:
+
+    ```{r}
+    # res.hcpc$desc.var$quanti Please check annex. 
+    ```
+
+    -   This cluster represents vehicles with a relatively recent manufacturing year (2018.91), higher prices (25074.78), lower taxes (145.86), smaller engine sizes (1.75), lower fuel efficiency (46.63 MPG), and lower mileage (7082.22). This cluster represents recent models (mean year 2018.91) with higher prices and smaller engine sizes. Despite lower taxes, these vehicles have lower fuel efficiency and mileage, suggesting a preference for newer cars.
+
+    -   Vehicles in this cluster have larger engine sizes (3.08), higher prices (40327.40), slightly higher manufacturing years (2017.93), slightly higher taxes (148.47), lower mileage (14545.83), and lower fuel efficiency (38.94 MPG). Cluster 2 showcases larger, more powerful vehicles with higher prices and slightly newer manufacturing years. Despite slightly higher taxes, these cars exhibit lower mileage and fuel efficiency, appealing to those seeking performance and modern features.
+
+    -   this cluster is characterized by vehicles with higher fuel efficiency (61.75 MPG), higher mileage (25448.23), lower manufacturing years (2016.64), lower taxes (143.08), smaller engine sizes (1.70), and lower prices (16126.43). Vehicles in this cluster stand out for their higher fuel efficiency and mileage, lower manufacturing years, and smaller engine sizes. With lower taxes and prices, these cars are likely more economical and environmentally friendly, attracting a conscious consumer base.
+
+    -   Vehicles in this cluster have higher taxes (199.93), higher mileage (42536.34), larger engine sizes (2.36), slightly lower fuel efficiency (44.60 MPG), and manufacturing years slightly below the overall mean. Cluster 4 is characterized by higher taxes, elevated mileage, and larger engine sizes. Although slightly below the overall mean in fuel efficiency, these cars may appeal to those valuing power and durability, especially with manufacturing years slightly below average.
+
+    -   This cluster includes vehicles with significantly higher mileage (60750.74), moderately higher fuel efficiency (57.71 MPG), slightly smaller engine sizes (1.96), lower prices (11852.06), and manufacturing years notably below the overall mean (2014.28). This cluster represents vehicles with significantly higher mileage, moderately improved fuel efficiency, and slightly smaller engine sizes. With notably lower prices and manufacturing years below the mean, these cars may appeal to budget-conscious consumers seeking reliable, efficient transportation.
+
+# 4. Correspondence Analysis
+
+-   Correspondence Analysis is a statistical technique for exploring relationships between categorical variables.
+
+-   In our pervious deliverablle, we have already created a factor variable `f.price` with 7 levels.
+
+-   In our case study we will try to find the relationship between `f.price` and two categorical factor variables `f.year`and `f.miles`
+
+## 4.1 F.Price vs F.Year
+
+```{r}
+x<-table(df[,c("f.price", "f.year")])
+res.ca<-CA(x)
+```
+
+-   We apply Chi Square's test and check the p-value, as we can see, it is very small and very close to zero, so we have evidence to reject the null hypothesis, and prove the existence of a strong relationship between two factor variables.
+
+```{r warning=FALSE}
+chisq.test(x)
+
+```
+
+-   As we can see, the first components has 73,1% of variability, we could consider this ax enough to explain data. This also explain how these are related.
+
+```{r}
+fviz_eig(res.ca, addlabels = TRUE)
+```
+
+-   As the graph below shows us, the close relationship that `f.price` catgeories and `f.year` categories have.
+
+-   As time elapses since a car's initial release, it tends to be perceived as more affordable, while conversely, newly released models often carry a higher price tag.
+
+```{r}
+plot( res.ca, cex=0.8, graph.type = "classic" )
+lines( res.ca$row$coord[,1], res.ca$row$coord[,2], col="blue", lwd = 2 )
+lines( res.ca$col$coord[,1], res.ca$col$coord[,2], col="red", lwd = 2 )
+fviz_ca_biplot(res.ca,repel=TRUE)+theme_bw()
+
+```
+
+## 4.2 F.Price vs F.Miles
+
+-   Now we will try to do the same seteps but with `f.miles`:
+
+```{r}
+x<-table(df[,c("f.price", "f.miles")])
+res.ca<-CA(x)
+```
+
+-   We apply Chi Square's test and check the p-value, as we can see, it is very small and very close to zero, so we have evidence to reject the null hypothesis, and prove the existence of a strong relationship between two factor variables.
+
+```{r}
+chisq.test(x)
+```
+
+-   As we can see, the first components has 87,6% of variability, we could consider this ax enough to explain data. This also explain how these are related.
+
+```{r}
+fviz_eig(res.ca, addlabels = TRUE)
+```
+
+-   As the graph below shows us, the close relationship that `f.price` categories and `f.miles` categories have.
+
+```{r}
+plot( res.ca, cex=0.8, graph.type = "classic" )
+lines( res.ca$row$coord[,1], res.ca$row$coord[,2], col="blue", lwd = 2 )
+lines( res.ca$col$coord[,1], res.ca$col$coord[,2], col="red", lwd = 2 )
+fviz_ca_biplot(res.ca,repel=TRUE)+theme_bw()
+```
+
+## 4.3 Conclusion
+
+-   Can these categories that can be combined/avoided to explain transformed price target into f.price ? Yes, they are related, as we saw both are very related to f.price and combined to explain target variable.
+
+# 5 Multiple Correspondence Analysis
+
+## 5.1 MCA & Eigenvalues & dominant axes analysis
+
+-   We'll utilize a dataframe free of previously identified multivariate outliers to avoid anomalies. The variable "price" will serve as a supplementary quantitative variable, while "f.price" and the binary target "Audi" will function as supplementary qualitative variables. We will also discard f.year and f.miles as they are very related to f.price as we spotted previously.
+
+```{r}
+library(FactoMineR)
+library(factoextra)
+x<-df[,c(3,4,6,10, 12, 14:17)] #Does not include Multivariant Outliers
+res.mca<-MCA(x, quanti.sup = c(1), quali.sup = c(5,9)) 
+```
+
+-   Based on Kaiser Criteria, 7 components should be retained.
+
+```{r}
+length(which(res.mca$eig[,1] > mean(res.mca$eig[,1])))
+```
+
+-   In 7 components, it is accumulated 63.13% of variance.
+
+```{r}
+res.mca$eig[1:7,]
+
+```
+
+```{r}
+fviz_eig(res.mca)
+```
+
+## 5.2 Individuals Point of View
+
+-   **Are there any individuals "too contributive"?**
+
+-   As we can see, There are some individuals that contribute more in the first component, and others that that do the same in the second component. We can also state the existence of many individuals that contribute equally in both components.
+
+```{r}
+head(res.mca$var$contrib)
+fviz_mca_ind(res.mca, geom=c("point"),col.ind="contrib", gradient.cols =
+c("yellow", "red"))
+
+
+```
+
+-   **Are there any groups?**
+
+-   From the the previous graph, we can spot there a few individuals that can form a group as they are scattered equally without any specific pattern.
+
+-   As we can see in the following output table, categories tend to contribute equally or contribute very low in different dimensions, so there is not grouping pattern in the plots.
+
+```{r}
+head(res.mca$var$cos2)
+```
+
+```{r}
+fviz_cos2(res.mca, choice = "var", axes = 1:2)+theme_bw()
+
+```
+
+-   We can see through the graph that no individual groups are spotted base on each variable, the only one that can show a better grouping is if we depend on transmission types, we can split individuals into two groups Manual and Automatic/Semi-Automatic.
+
+-   Please check Annex, to chaeck the other grouping graphs of individuals:
+
+```{r}
+grp<- df$transmission
+fviz_mca_ind(res.mca, label="none", habillage = grp, addEllipses = TRUE)
+
+```
+
+## 5.3 Interpreting map of categories:
+
+-   Map of variables: **`transmission`**, **`manufacturer`** and **`f.engineSize`** are better represented in Dim1 , meanwhile **`f.tax`** and **`f.mpg`** are better represented in Dim2.
+
+-   **`f.fueltype`** is represented equally and insignificantly compared to other variables.
+
+    ```{r}
+    fviz_mca_var(res.mca, choice="mca.cor", repel=TRUE)
+    ```
+
+-   **`f.tax_Mediumf.mpg_Very High`** categories are better represented in Dim2 is represented
+
+-   We can see that **`Cheap/Very Chea`** **`Manual`** Transmission and **`Small`** EngineSize are close to each other and contribute negatively at same way in Dim1.
+
+-   **`Mercedes`**, **`Automatic`** transmission, **`Hybrid`** and **`Large Engine Size`**, **`very Expensive`** are also gathered in the same area of the Map which makes sense, and contribute positvely in Dim1.
+
+```{r}
+fviz_mca_var(res.mca, repel=TRUE)
+```
+
+## 5.4 Interpreting the axes associations to factor map
+
+-   The following result gives us an insight regarding the variables and categories that are related to the two retained axes:
+
+-   Dim1:
+
+    -   Variables: **`f.engineSize`** with R-Squared value of 0.71 and **`transmission type`** (0.50)
+
+    -   Categories: **`f.engineSize= f.engineSize_Large`** and **`transmission=f.Trans-Manual`**
+
+```{r}
+res.desc <- dimdesc(res.mca, axes = c(1,2))
+#res.desc[[1]]
+
+```
+
+-   Dim2:
+
+    -   Variables: **`f.mpg`** with a R-Squared value of 0.73 and **`fuelType`** (0.35)
+
+    -   Categories: **`f.mpg=f.mpg_Very High`** and **`fuelType=Petrol`**
+
+```{r}
+#res.desc[[2]] 
+```
+
+## 5.5 MCA with all variables
+
+-   We will try MCA taking into account all numerical variables:
+
+    ```{r}
+    res.mca2 <- MCA(df, quanti.sup=c(2,3,5,7:9),
+    quali.sup=c(12,17))
+    ```
+
+-   Dim1:
+
+    -   Variables: **`f.engineSize`** has a Rsquared value of 0.72 and **`transmission`** (0.50)
+
+    -   Categories: **`f.engineSize= f.engineSize_Large`** and **`transmission=f.Trans-Manual`**
+
+```{r}
+res.desc2 <- dimdesc(res.mca2, axes = c(1,2))
+#res.desc2[[1]]
+```
+
+-   Dim2:
+
+    -   Variables: **`f.mpg`** with a R-Squared value of 0.73 and **`fuelType`** (0.35)
+
+    -   Categories: **`f.mpg=f.mpg_Very High`** and **`fuelType=Petrol`**
+
+```{r}
+#res.desc2[[2]]
+```
+
+**Conclusions:**
+
+-   Both MCA analysis (either with all numerical variables as supplementary or not) has the same results on both axes. So there was no enhancement in the axis interpretation.
+
+# 6 Hierarchical Clustering from MCA
+
+## 6.1 Hierarchical Clustering
+
+-   We will make 5 clusters to facilitate the process of further comparision and analysis:
+
+```{r}
+res.hcpcMCA <- HCPC(res.mca,nb.clust = 5, order = TRUE)
+```
+
+## 6.2 Clustering Quality
+
+-   This clustering has a total gain of inertia of 47.25%, in case if we wanted to achieve at least 80% we will be needing 23 clusters, which makes the study more complicated.
+
+    ```{r}
+    ((res.hcpcMCA$call$t$within[1]-res.hcpcMCA$call$t$within[5])/
+    res.hcpcMCA$call$t$within[1])*100
+    ```
+
+    ```{r}
+    ((res.hcpcMCA$call$t$within[1]-res.hcpcMCA$call$t$within[23])/
+    res.hcpcMCA$call$t$within[1])*100
+    ```
+
+## 6.3 Clustering Description:
+
+-   We can see the following barplot describing the individuals distribution through different clusters
+
+```{r}
+table(res.hcpcMCA$data.clust$clust)
+barplot(table(res.hcpcMCA$data.clust$clust), main= "observations/cluster")
+```
+
+-   The extremely low p-values (approaching zero) suggest a significant association between the categories of the variables, indicating that these variables contribute significantly to the formation of clusters.
+
+```{r}
+
+res.hcpcMCA$desc.var$test.chi2 
+```
+
+**Describing each cluster in relation with different categories:**
+
+```{r include=FALSE}
+res.hcpcMCA$desc.var$category 
+```
+
+1.  Cluster 1 is characterized by a dominance of smaller engine sizes, with an overwhelming 80.31% of cars falling into the "**`Small`**" category. The fuel type for this cluster is predominantly **`petrol`**, constituting 54% of the vehicles. **`Manual`** transmission is strongly associated, with 47.52% of cars in this cluster featuring this type. The cluster is notably linked to the manufacturer **`Volkswagen`** 47.47%). Furthermore, high miles per gallon (MPG) is a defining characteristic, as 41.08% of the cars in this cluster fall into the "**`High`**" category. The pricing spectrum in this cluster is diverse, with a substantial portion (47.43%) classified as "**Very Cheap**." The tax levels are also noteworthy, with a strong association (25.9%) with the "**`Low`**" tax band
+
+2.  Cluster 2 exhibits a preeminence of **`medium-sized engine`** cars, representing 60.6% of the vehicles in this category. **`Diesel`** fuel type is prevalent, constituting 49.1% of the cars. **`BMW`** stands out as the dominant manufacturer, with 56.41% of vehicles in this cluster associated with the brand. The cluster features a balanced distribution across various miles per gallon (MPG) categories, with a significant presence in both "**`Moderate`**" (50.2%) and "**`Very High`**" (42.27%) MPG ranges. **`Hybrid`** fuel type and **`manual transmission`** are notably associated with this cluster, each representing 81.25% and 37.54%, respectively. Additionally, there is a considerable concentration of cars with **`high tax`** (38.76%).
+
+3.  In Cluster 3, there is a strong association (69.23%) with cars having a "**`Medium`**" tax level. **`Very high`** miles per gallon (MPG) is a defining characteristic, representing 18.97% of the vehicles in this cluster. **`Diesel`** fuel type is predominant, accounting for 8.43% of the cars. The pricing landscape varies, with a significant presence of cars classified as "**`Very Affordable`**" (13.01%) and "**`Cheap`**" (11.73%) and "**`Very Cheap`**" (6.57%). **`Manual transmission`** is notable in this cluster, with 7.42% of cars featuring this type. The cluster is also marked by **`medium-size engine`** cars (6.51%).
+
+4.  Cluster 4 is characterized by a dominant association with low miles per gallon (MPG), with 79.69% of cars falling into the "**`Low`**" category. **`Very expensive`** cars constitute a substantial portion of this cluster (62.80%). The cluster is strongly associated with **`large engine size`** (48.06%) and **`petrol`** fuel type (36.59%). **`High`** taxes (40.88%) and **`automatic transmission`** (36.30%) are also notable features. **`Audi`** emerges as a prominent manufacturer in this cluster
+
+5.  Cluster 5 is distinguished by a strong association with **`Mercedes`** as the manufacturer (60.37%). **`Diesel`** fuel type is prevalent, constituting 29.88% of the cars in this cluster. **`Large engine sizes`** (41.90%) are also notable features. The cluster is characterized by a medium association with **`low`** taxes (22.33%) and **`very high`** miles per gallon (MPG) (30.25%). Additionally, **`automatic`** and **`semi-automatic`** transmissions are significant in this cluster, representing 26.02% and 25.88%, respectively. The pricing spectrum is diverse, with a notable presence of cars in various price ranges.
+
+When it comes to numerical target variable price it a low effect in this clustering creation compared but as p-vale is 0 we can say that this variable has somehow an effect on the this clustering. Note that, we passed this variable as supplementary during MCA.
+
+```{r}
+res.hcpcMCA$desc.var$quanti.var
+```
+
+We can aslo see how **`price`** behaves in each cluster:
+
+```{r}
+res.hcpcMCA$desc.var$quanti
+```
+
+1.  In Cluster 1, the "**`price`**" variable exhibits a significant negative v-test value of -20.95, suggesting a considerable difference in mean prices compared to the overall dataset. The mean price in this cluster is notably lower at 15,308.06, with a standard deviation of 5,663.19. This substantial deviation is highly significant (p-value = 1.75e-97), emphasizing a distinct pricing pattern in this cluster cheap and affordable.
+
+2.  Cluster 2 shows a significant negative v-test value of -10.80 for the "price" variable, indicating a noteworthy difference in mean prices. The mean price in this cluster is \$19,079.93, with a standard deviation of \$7,331.85. The low p-value (3.53e-27) underscores the significance of the observed price difference in this cluster.
+
+3.  For Cluster 3, the "price" variable demonstrates a significant negative v-test value of -10.48, highlighting a substantial difference in mean prices. The mean price in this cluster is \$14,011.54, with a standard deviation of \$3,161.38. The p-value (1.04e-25) reinforces the significance of the observed pricing distinction. This cluster has cheap and affordable pricing.
+
+4.  In Cluster 4, the "price" variable exhibits a substantial positive v-test value of 31.66, indicating a significant difference in mean prices. The mean price in this cluster is \$31,238.13, with a standard deviation of \$15,382.38. The extremely low p-value (5.27e-220) emphasizes the highly significant pricing difference in this cluster. This cluster has expensive/very expensive pricing.
+
+5.  Cluster 5 shows a positive v-test value of 7.77 for the "price" variable, indicating a significant difference in mean prices. The mean price in this cluster is \$24,394.22, with a standard deviation of \$9,709.73. The p-value (7.93e-15) underscores the significance of the observed price difference in this cluster. This cluster ha affordable pricing.
+
+## 6.4 Paragons & Class-Specific individuals:
+
+We can spot the most contributing individuals and extreme ones as following:
+
+```{r}
+res.hcpcMCA$desc.ind$para 
+```
+
+```{r}
+res.hcpcMCA$desc.ind$dist 
+```
+
+```{r}
+para1<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$para[[1]]))
+dist1<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$dist[[1]]))
+para2<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$para[[2]]))
+dist2<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$dist[[2]]))
+para3<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$para[[3]]))
+dist3<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$dist[[3]]))
+para4<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$para[[4]]))
+dist4<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$dist[[4]]))
+para5<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$para[[5]]))
+dist5<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$dist[[5]]))
+plot(res.mca$ind$coord[,1],res.mca$ind$coord[,2],col="grey50",cex=0.5,pch=16)
+points(res.mca$ind$coord[para1,1],res.mca$ind$coord[para1,2],col="pink",cex=1,pch=16)
+points(res.mca$ind$coord[dist1,1],res.mca$ind$coord[dist1,2],col="turquoise",cex=1,pch=16)
+points(res.mca$ind$coord[para2,1],res.mca$ind$coord[para2,2],col="darkviolet",cex=1,pch=16)
+points(res.mca$ind$coord[dist2,1],res.mca$ind$coord[dist2,2],col="darkred",cex=1,pch=16)
+points(res.mca$ind$coord[para3,1],res.mca$ind$coord[para3,2],col="yellow",cex=1,pch=16)
+points(res.mca$ind$coord[dist3,1],res.mca$ind$coord[dist3,2],col="gold",cex=1,pch=16)
+points(res.mca$ind$coord[para4,1],res.mca$ind$coord[para4,2],col="orange",cex=1,pch=16)
+points(res.mca$ind$coord[dist4,1],res.mca$ind$coord[dist4,2],col="lightblue",cex=1,pch=16
+)
+points(res.mca$ind$coord[para5,1],res.mca$ind$coord[para5,2],col="lightgreen",cex=1,pch=16)
+points(res.mca$ind$coord[dist5,1],res.mca$ind$coord[dist5,2],col="violet",cex=1,pch=16)
+```
+
+## 6.5 Comparison of clusters obtained after K-Means (based on PCA) and/or Hierarchical Clustering (based on PCA) focusing on targets
+
+### 6.5.1 General Comparision
+
+-   The accuracy of approximately 26.12% suggests a moderate level of alignment between the hierarchical clustering and the actual classes. This indicates that the clusters generated by the hierarchical clustering algorithm capture some of the underlying patterns present in the HC-MCA classes, but there is room for improvement.
+
+-   The low accuracy of approximately 18.10% indicates a poor alignment between the hierarchical clustering and these HC-MCA clusters. This raises questions about the effectiveness of the clustering algorithm in capturing the patterns inherent in the **`claKM`** variable. It's essential to scrutinize the reasons behind this discrepancy. Potential issues could include the sensitivity of the hierarchical clustering algorithm to certain data patterns, the appropriateness of the clustering parameters chosen, etc.
+
+-   If we had a greater concordance, this would mean that they would be more similar.
+
+```{r}
+df$hcpckMCA<-res.hcpcMCA$data.clust$clust
+# With Hierarchical Clustering (PCA)
+t1<-table(df$claH,df$hcpckMCA)
+t2<-table(df$claKM,df$hcpckMCA)
+t1
+t2
+```
+
+```{r}
+100*sum(diag(t1)/sum(t1))
+100*sum(diag(t2)/sum(t2))
+```
+
+### 6.5.2 Comparison based on quantitative target: Price
+
+-   The results unveil distinctive patterns in the relationship between the "price" variable and the clustering variable across three clustering methods. Hierarchical Clustering based on PCA exhibits the most substantial association, influencing price variation by 51%. In K-Means Clustering, the "price" variable shows a noteworthy 45% impact, indicating a robust relationship. On the other hand, MCA Hierarchical Clustering reveals a comparatively modest influence, with an Eta2 value of 0.28. These numerical insights shed light on the varying degrees of impact that different clustering methodologies exert on the variable of interest, providing a quantitative understanding of their implications.
+
+```{r include=FALSE}
+res.hcpc$desc.var$quanti.var
+#price      0.5092217       0
+```
+
+```{r warning=TRUE, include=FALSE}
+res.cat <-catdes(df,18)  # 18 is claKM,variable indicating the cluster group on K-Means
+res.cat
+#price      0.4481003       0
+```
+
+```{r include=FALSE}
+res.hcpcMCA$desc.var$quanti.var
+#price      0.2759604       0
+```
+
+### 6.5.3 Comparison based on binary target: Audi
+
+-   The variable "Audi" consistently shows significant associations within different cluster methods, and it plays a meaningful role in distinguishing clusters and sometimes note.
+
+-   The Audi variable exhibits a noteworthy association exclusively in one only cluster during Hierarchical Clustering based on PCA, evident from its considerably higher p-value in comparison to other categorical variables. This elevated p-value implies a diminished linkage and contribution to the formation of these clusters using this method. In contrast, during K-Means clustering, despite a higher p-value of 8.045414e-03, Audi's impact is relatively modest, particularly in clusters 3 and 4. Surprisingly, this contribution is more substantial than the prior method, despite the lower p-value. Notably, MCA Hierarchical Clustering stands out with the lowest p-value of 1.429662e-67, underscoring the pivotal role played by Audi categories (Yes and No) in shaping clusters 2, 4, and 5, thereby contributing significantly to the underlying structure.
+
+```{r include=FALSE}
+res.hcpc$desc.var
+# Audi           7.482557e-03   4
+
+# $4
+#Audi=Audi Yes   4.5279383  32.8671329 21.2139792 1.023749e-03   3.283918
+#Audi=Audi No    2.4902724  67.1328671 78.7860208 1.023749e-03  -3.283918
+```
+
+```{r include=FALSE}
+res.cat <-catdes(df,18) # 18 is claKM,variable indicating the cluster group on K-Means
+res.cat
+
+
+#Audi          8.045414e-03   4
+
+#$3
+#Audi=Audi Yes   6.8400771 27.2030651 21.21397915  1.783851e-02   2.368953
+#Audi=Audi No    4.9286641 72.7969349 78.78602085  1.783851e-02  -2.368953
+
+#$4
+#Audi=Audi Yes   32.17726397 19.18437679 21.21397915  9.552902e-03  -2.591606
+#Audi=Audi No    36.49805447 80.81562321 78.78602085  9.552902e-03   2.591606
+
+
+```
+
+```{r include=FALSE}
+res.hcpcMCA$desc.var
+
+
+#Audi          1.429662e-67  4
+
+#$2
+#Audi=Audi Yes  36.223507 23.3830846 21.2139792  9.825840e-03   2.58189
+#Audi=Audi No   31.958495 76.6169154 78.7860208  9.825840e-03  -2.581899
+
+
+#$4
+#Audi=Audi Yes  35.6454721 33.8208410 21.2139792  8.902573e-29  11.130608
+#Audi=Audi No   18.7808042 66.1791590 78.7860208  8.902573e-29 -11.130608
+
+#$5
+#Audi=Audi Yes 0.6743738  0.8363202 21.213979  1.611039e-83 -19.362124
+#Audi=Audi No  21.5304799 99.1636798 78.786021  1.611039e-83  19.362124
+```
+
+**Conclusion:**
+
+-   In conclusion, the optimal clustering method is contingent on our research objectives, emphasizing the nuanced nature of this decision. Rather than asserting superiority of one method over another, the selection should align with the desired data interpretation, research goals, and study conditions. A judicious choice rooted in a comprehensive understanding of these factors ensures a rigorous application of clustering techniques, fostering a more insightful and robust data analysis.
+
+# 7. Annex:
+
+-   K.Means Clustering Description:
+
+```{r}
+res.cat <-catdes(df,18)
+```
+
+-   Hierarchical Clustering Description:
+
+```{r}
+res.hcpc$desc.var$category
+```
+
+```{r}
+res.hcpc$desc.var$quanti
+```
+
+-   MCA Groups Graphs:
+
+```{r}
+grp<- df$fuelType
+fviz_mca_ind(res.mca, label="none", habillage = grp, addEllipses = TRUE)
+
+grp<- df$manufacturer
+fviz_mca_ind(res.mca, label="none", habillage = grp, addEllipses = TRUE)
+
+
+grp<- df$f.price
+fviz_mca_ind(res.mca, label="none", habillage = grp, addEllipses = TRUE)
+
+
+grp<- df$f.tax
+fviz_mca_ind(res.mca, label="none", habillage = grp, addEllipses = TRUE)
+
+grp<- df$f.mpg
+fviz_mca_ind(res.mca, label="none", habillage = grp, addEllipses = TRUE)
+
+grp<- df$f.engineSize
+fviz_mca_ind(res.mca, label="none", habillage = grp, addEllipses = TRUE)
+
+grp<- df$Audi
+fviz_mca_ind(res.mca, label="none", habillage = grp, addEllipses = TRUE)
+
+```
+
+-   Interpreting the axes associations to factor map
+
+```{r}
+res.desc <- dimdesc(res.mca, axes = c(1,2))
+res.desc[[1]]
+res.desc[[2]] 
+```
+
+-   MCA with all variables : description of axes
+
+```{r}
+res.desc2[[1]]
+```
+
+```{r}
+res.desc2[[2]]
+```
+
+-   Hierarchical clustering from MCA
+
+```{r}
+res.hcpcMCA$desc.var$category 
+```

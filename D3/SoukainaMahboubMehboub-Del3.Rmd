@@ -1,0 +1,988 @@
+---
+title: "Forecasting Models: Linear & Binary Regression Analysis with Advanced Multivariate Techniques"
+author: "Soukaïna Mahboub Mehboub"
+date: "December 8th, 2023"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: TRUE
+    toc_depth: 4
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r include=FALSE}
+#setwd("C:/Users/Soukaïna/Desktop/ADEI/D3") 
+#filepath<-"C:/Users/Soukaïna/Desktop/D3"
+load("WorkspaceD3.RData")
+df<-intial_data
+
+# Load Required Packages: to be increased over the course
+options(contrasts=c("contr.treatment","contr.treatment"))
+
+requiredPackages <- c("effects","FactoMineR","car", "factoextra","RColorBrewer","ggplot2","dplyr","ggmap","ggthemes","knitr")
+
+#use this function to check if each package is on the local machine
+#if a package is installed, it will be loaded
+#if any are not, the missing package(s) will be installed and loaded
+package.check <- lapply(requiredPackages, FUN = function(x) {
+  if (!require(x, character.only = TRUE)) {
+    install.packages(x, dependencies = TRUE)
+    library(x, character.only = TRUE)
+  }
+})
+#verify they are loaded
+search()
+```
+
+\newpage
+
+# *1. Introduction:*
+
+-   *The objective of this deliverable is to develop Forecasting Models for both numeric and categorical targets. At the commencement of this project, we were presented with a dataset encompassing a comprehensive list of cars, each accompanied by distinct characteristics. Our primary aim revolves around the creation of a robust model capable of predicting either the price of a vehicle and determining if it is an Audi or not.*
+
+-   *The initial phases involved different multivariant analysis of the dataset, coupled with enhancements aimed at comprehending and refining the available data. This preparatory step sought to optimize the dataset to its fullest potential before embarking on the creation of pertinent models. Subsequent to this preparatory phase, the focus shifted towards the development of linear models designed to facilitate accurate predictions based on the identified characteristics.*
+
+# *2. Prediction model for numeric target "Price":*
+
+## *2.1 Initial model: price \~ engineSize + mpg*
+
+-   *When examining the interplay between price and other variables via Principal Components Analysis, a notable observation surfaces: the most pronounced (negative) correlation is evident between year and mpg (as illustrated in the following graph). Therefore, the most intuitive variable that come to mind for inclusion in our first initial model is mpg.*
+-   *It's worth highlighting a robust correlation between Price and the other variables in our dataset. For instance, the correlation coefficients reveal noteworthy associations: 0.64 with Engine Size, 0.56 with Year, -0.52 with Mileage, and -0.58 with MPG. These correlations, coupled with p-values approaching zero, underscore the substantial impact of these variables on our target variable, Price. These insights affirm the significance of Engine Size, Year, Mileage, and MPG as influential factors shaping the main dynamics in our model. The 'tax' variable holds minimal significance in this context, which is why it doesn't appear in the following output.*
+
+```{r}
+# Graph of the variables
+fviz_pca_var(res.pca)
+res.con <- condes(df,num.var=which(names(df)=="price"))
+res.con$quanti 
+```
+
+-   *Let's built the first model based on these conclusions:*
+-   Disclaimer: we won't include the multivariant outliers that we spotted during the first/second deliverable.
+
+```{r}
+df<-df[-mouts,]
+m0<-lm(price~engineSize+mpg,data=df)
+summary(m0) 
+```
+
+-   *The model currently exhibits a moderate level of variability, as indicated by the R-squared value of 55.24%. While this suggests that approximately 55.24% of the variability in the dependent variable (price) is explained by the included independent variables (engineSize and mpg), there is room for improvement. Our aim is to enhance the model's explanatory power, ultimately surpassing an ambitious target of 80% R-squared. Achieving this goal would signify a more robust and accurate representation of the factors influencing the price, thereby enhancing the model's predictive capabilities.*
+
+## *2.2 Adding more covariates: price \~ mileage + year + engineSize + mpg*
+
+-   *To enhance the model further, we will incorporate mileage and year, identified as correlated variables with price through Principal Component Analysis (PCA) deductions.*
+
+```{r}
+m1<-lm(price~mileage+year+engineSize+mpg,data=df)
+summary(m1) 
+```
+
+*The new model, denoted as `m1`, represents a significant improvement over the initial model (`m0`). Here are the key findings from the summary of m1:*
+
+-   *The residuals exhibit a narrower range compared to m0, with a minimum of -26504 and a maximum of 48651.*
+
+-   *The residual standard error has decreased to 5321, indicating a reduction in the variability of the residuals compared to m0.*
+
+-   *The R-squared value has significantly increased to 78.33%, and the adjusted R-squared is also high (78.31%). This implies that the new model explains approximately 78.33% of the variability in the dependent variable.*
+
+*`m1` demonstrates substantial improvement over `m0`, with a higher R-squared, lower residual standard error, and significant coefficients. This model appears to be a more powerful predictor of price, explaining a substantial portion of the variability.*
+
+```{r}
+vif(m1)
+
+```
+
+-   *The provided values, all falling below 5, suggest that the correlation impact in this regression is relatively modest and not particularly influential. These findings suggest that while some correlation exists among certain predictors, the multicollinearity in the model is generally well-controlled, with VIF values falling within acceptable ranges.*
+
+```{r}
+par(mfrow=c(2,2));
+plot(m1,id.n=0)
+
+```
+
+-   *Even though we achieved a high Multiple R-squared value in this model (78.33% of the variability explained), the residual plots still reveal some imperfections that we need to address and improve upon.*
+-   *As we observe, none of the previous graphs show some heteroscedasticity as points are not equally scattered.*
+    -   *"Residuals vs Fitted" graph detects residuals that experience heteroscedasticity.*
+
+    -   *"Q-Q Residuals" graph shows us the normality of residuals, as the residuals tend to dodge the normal line this indicates non-normality of these residuals.*
+
+    -   *"Scale-Location" graph reassures the heteroscedasticity of residuals as how they are spread.*
+
+    -   *"Residuals vs Leverage Fitted" graph detects influential individuals with residuals that might strongly affect the regression model. Some outliers impact significantly impact the normal distribution.*
+
+```{r}
+AIC(m0,m1)
+```
+
+***Is our data normal?***
+
+-   *Assessing the normality of our target variable would help us improve these graphs or eve our Multiple R-squared value.*
+
+```{r}
+hist(df$price,freq=F,col="grey")
+mm<-mean(df$price);ss<-sd(df$price)
+curve(dnorm(x,mean=mm,sd=ss),col="red",lwd=2,lty=3, add=T)
+
+```
+
+-   *The Shapiro Test performs normality test on the variable "price". The result is an extremely low p-value (\< 2.2e-16). The small p-value indicates strong evidence against the null hypothesis, suggesting that the data does not follow a normal distribution.*
+
+```{r}
+shapiro.test(df$price)
+
+```
+
+*Other tests:*
+
+-   *The following Skewness test result shows a non-null value which indicates non-normality.*
+
+```{r}
+library(e1071)
+skewness(df$price)
+```
+
+-   *The following Kurtosis test result shows a non-null value which indicates non-normality.*
+
+```{r}
+kurtosis(df$price)
+```
+
+## *2.3 Box-Cox transformation of price:*
+
+-   *In an effort to enhance our linear regression model, we applied a Box-Cox transformation to the target variable. This transformation, guided by the optimal lambda from the `boxcox` function, seeks to address issues related to variance and normality. By optimizing the target variable's distribution, we aim to improve the overall performance and reliability of our regression analysis.*
+
+-   *Given the considerable deviation of the lambda interval from zero, we'll refrain from employing a direct logarithmic transformation and, instead, pursue the following strategy:*
+
+```{r}
+library(MASS)
+boxcox_results<-boxcox(m1,data=df)
+
+# Extract the optimal lambda
+optimal_lambda <- boxcox_results$x[which.max(boxcox_results$y)]
+
+# Target variable transformed
+df$price_transformed <- (df$price^ optimal_lambda - 1) / optimal_lambda
+```
+
+-   *Let's build a second model with `price_transformed`:*
+
+```{r}
+m2<-lm(price_transformed~mileage+year+engineSize+mpg,data=df)
+summary(m2)
+```
+
+-   *The R-squared went from 78% to 83%, it is a small but significant improvement when it comes to only make one only transformation. This indicates a better fit than the first model. This new model explain more variability in the relationship between the predictors and the target variable.*
+
+-   *To check, we calculate Variance Inflation Factors for this mode and we can see that the values are constant, no significant change in these values.*
+
+```{r}
+vif(m2)
+```
+
+-   *Let's analyse residual plots:*
+
+```{r}
+par(mfrow=c(2,2));
+plot(m2,id.n=0);
+
+```
+
+-   *As we can see, even though the Multiple R-squared: didn't increase a lot, we still could sense a lot of improvement through these graphs.*
+
+-   *The current plots illustrate a normal distribution of residuals, affirming the selection of this model as a preferred one. Notably, homoscedasticity is now more evident, and also indicating improved normality. However, it's worth noting that the residuals vs. leverage plot hasn't shown a better enhancement.*
+
+```{r}
+AIC(m1,m2)
+```
+
+## *2.4 Covariates transformations with BoxTidwell:*
+
+-   *Utilizing the `boxTidwell` function could provide valuable insights into potential transformations that may enhance our model performance across various lambda values.*
+
+-   *Note: The variables `year` and `mileage` exhibit a higher degree of correlation compared to other variables. Therefore, it is not feasible to incorporate both of them simultaneously during the computation of the boxTidwell function.*
+
+```{r echo=TRUE}
+library("carData")
+boxTidwell(price_transformed~mileage+engineSize+mpg,data=df)
+```
+
+-   As engineSize's lambda is close to zero than one, we will apply a logarithmic transformation.
+
+```{r}
+library("carData")
+m3<-lm(price_transformed~mileage+year+log(engineSize)+mpg,data=df)
+summary(m3) 
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(m3,id.n=0)
+
+```
+
+-   *While the Multiple R-squared values do not exhibit significant improvement compared to other models, the notable distinction lies in the graphical representation. The plots vividly reveal better homoscedasticity, pinpoint individuals with less leverage, and visible normality.*
+
+***Model Validation:***
+
+-   We will employ the Breusch-Pagan test to evaluate homoscedasticity. Since the p-value associated with the test is significantly low, we can reject the null hypothesis of heteroscedasticity. Consequently, this leads us to conclude that the model exhibits **homoscedasticity**, suggesting that the variance of the residuals is consistent across all levels of the explanatory variables.
+
+```{r}
+library(lmtest)
+bptest(m3)
+```
+
+-   *The VIF values are within a relatively moderate range, with mileage having a VIF of 2.9, year with 2.79, log-engineSize with 1.16, and mpg with 1.32. While the VIF for mileage and year is slightly above 2, suggesting some correlation, **none of the variables exhibit severe multicollinearity** (VIF above 5).*
+
+```{r}
+vif(m3)
+
+
+```
+
+-   *In the below residual plots for model m3 using Cook's distance, "mileage" and "year" exhibit non-significant test statistics, suggesting well-behaved residuals. However, "engineSize" and "mpg" display highly significant test statistics, indicating deviations from the model assumptions.*
+-   *The flat line in the scatter plot for mileage and year indicates a steady linear trend, meeting the assumption of consistent variability. But, when looking at engine size and mpg, the pattern is less clear, suggesting possible deviations from these assumptions in that case.*
+-   *The graphical representations affirm the **independence** of residuals within this model. The plots indicate that there is no discernible pattern or structure in the residuals.*
+
+```{r}
+residualPlots(m3,id=list(method=cooks.distance(m3),n=10))
+
+```
+
+-   Let's proceed to display the box plots of the R-student values, Hat values, and Cook's distances for the observations in the model.
+
+```{r}
+par(mfrow=c(1,3))
+Boxplot(abs(rstudent(m3)),id=list(labels=row.names(df)))
+Boxplot(abs(hatvalues(m3)),id=list(labels=row.names(df)))
+Boxplot(cooks.distance(m3),id=list(labels=row.names(df)))
+```
+
+```{r}
+stu <- which(abs(rstudent(m3))>3.0)
+cook <- which(abs(cooks.distance(m3))>0.01)
+hat <- which(abs(hatvalues(m3))>0.004)
+outs<-unique(stu,cook,hat)
+```
+
+-   Spotting influential individuals:
+
+```{r}
+x<-influencePlot( m3, id=c(list="noteworthy",n=5))
+obs<-rownames(x)
+outs<-unique(outs,obs)
+
+df_outs<-df[-outs,]
+```
+
+-   Building a model without unusual and influential data:
+
+```{r}
+m4<- update(m3, data=df_outs)
+summary(m4)
+```
+
+-   The model demonstrates a high degree of explanatory power, about 84% of the variance in the dependent variable. This robust model performance, along with the significant coefficients and the reasonable distribution of residuals, underscores the importance of removing outliers and influential points in data analysis.
+
+-   These diagnostic plots indicate that the model **`m4`** is performing well. The assumptions of linearity, homoscedasticity, and normality of the residuals appear to have been met, and there are no obvious influential outliers. This suggests that the model provides a good fit to the data.
+
+```{r}
+par(mfrow=c(2,2))
+plot(m4,id.n=0)
+```
+
+-   Let's review and compare models `m3` and `m4` to decide which model is better suited for our analysis and then choose the one to move forward with.
+
+```{r warning=FALSE}
+AIC(m3,m4)
+```
+
+-   Although model m4 has a lower AIC and might be the better model, we'll proceed with `m3`. This way, we keep the outliers in the mix, which will help us spot and address them as we refine our model.
+
+## *2.5 Incorporating Interaction Terms in the Linear Regression Model*
+
+### *2.5.1 Adding qualitative variables as predictors*
+
+-   *The following output highlights the categorical variables most correlated with the `price`. Notably, `model` emerges as the most influential categorical factor, followed by `transmission`. It's essential to note that some factors are derived from previously utilized covariates, so we won't take them into consideration.*
+
+```{r}
+condes(df,3)$quali
+```
+
+-   *Let's create a new model and analyze the results:*
+
+```{r}
+m5<-lm(price_transformed~mileage+year+engineSize+mpg + model + transmission,data=df)
+summary(m5) 
+```
+
+-   *Based on the adjusted R-squared and other statistical measures, it appears that adding the categorical variables 'model' and 'transmission' significantly improved the model's explanatory power and overall fit to the data. We achieved 91% of variability,*
+
+-   *Based on the following plots, the non-horizontal red line in the scale-location graph suggests potential heteroscedasticity, challenging the assumption of constant variance. While the model retains excellent variability, the residuals' departure from normal distribution in extreme quantiles indicates potential limitations in capturing certain patterns. Additionally, there are influential extreme values with high leverage that could impact the regression and may require removal for model improvement.*
+
+```{r warning=FALSE}
+par(mfrow=c(2,2));
+plot(m5,id.n=0);
+```
+
+-   *For this model, mileage, year, engineSize, transmission and mpg show low VIF values (below 5), suggesting minimal multicollinearity. The "model" variable exhibits a relatively higher VIF of 5.47, possibly due to the categorical nature of car models.*
+
+```{r}
+vif(m5)
+```
+
+-   *The ANOVA table for model m5 shows highly significant p-values for all predictor variables, indicating their strong influence on the transformed price. The model is statistically significant overall, and the residuals have a low mean square value, suggesting a well-fitted model.*
+
+```{r}
+anova(m5)
+```
+
+### *2.5.2 Logarithmic transformation of "price":*
+
+*Can a target transformation make it better?*
+
+-   *Let's apply box-cox to check for possible transformations:*
+
+```{r}
+boxcox(price~mileage+year+engineSize+mpg +model + transmission,data=df)
+```
+
+-   *Given the proximity of lambda (λ) to zero, it suggests that applying a logarithmic transformation to the target variable would enhance its relationship with the predictor variables.*
+
+```{r}
+m6<-lm(log(price)~mileage+year+engineSize+mpg +model + transmission,data=df)
+summary(m6) 
+```
+
+-   *Improved normality in the regression is evident after the transformation, yet lower quantiles still exhibit a departure from a normal distribution. The residuals demonstrate a linear distribution, but the presence of influential data points affecting the regression is notable. A thorough analysis, including the removal of influential data, is recommended to refine model performance.*
+
+```{r warning=FALSE}
+par(mfrow=c(2,2))
+plot(m6,id.n=0)
+```
+
+-   *The variance inflation factor (VIF) values for the variables in the model (m6) indicate potential issues with multicollinearity. Variables like 'mileage,' 'year,' 'engineSize,' and 'mpg' show moderate VIF values, suggesting some correlation with other predictors. However, the 'model' variable has a high VIF of 5.47, indicating a substantial level of multicollinearity with other categorical variables.*
+
+```{r}
+vif(m6)
+```
+
+-   *Given the high VIF for the 'model' variable, it is influencing the effects plot in an unexpected way due to multicollinearity.*
+
+```{r}
+plot(allEffects(m6))
+
+```
+
+-   *m6 exhibits a negative and lowest AIC, indicating a potential improvement in model fit compared to others. This suggests that the inclusion of variables or transformations in m6 have enhanced its performance.*
+
+```{r}
+AIC(m0,m1,m2,m3,m4,m5,m6)
+```
+
+-   *Each predictor, including mileage, year, engine size, mpg, model, and transmission, exhibits highly significant p-values (\< 2.2e-16), indicating their substantial impact on the target variable. The residuals also have a low mean square value, suggesting good model fit. The model's overall significance is confirmed by a notable F value. The 'model' variable and 'transmission' both contribute significantly to explaining the variation in log-transformed price. The residuals have a small mean square value, indicating an effective fit.*
+
+```{r warning=FALSE}
+anova(m6)
+```
+
+*Can adding other categorical variables improve our model?*
+
+-   *The remaining categorical variables have a very low R-squared value in relation to the price, suggesting that they do not significantly contribute to explaining the variability in car prices. Therefore, adding these variables is unlikely to enhance the model's predictive power regarding price variations.*
+
+### *2.5.3 Interactions*
+
+-   *Constructing the following model will reveal which potential interactions play a significant role in explaining the variability. Interactions with lower AIC values indicate greater efficiency in contributing to the model.*
+
+-   *In this case, the candidates are: `model:transmission` and `mileage:model`.*
+
+```{r}
+mt<-lm(log(price)~(mileage+year+engineSize+mpg +  model + transmission)*(mileage+year+engineSize+mpg +  model + transmission),data=df)
+```
+
+```{r}
+mt<-step(mt)
+
+```
+
+#### *2.5.3.1 Interaction between two factors*
+
+-   *Interactions enhance models by capturing nuanced relationships between variables, allowing for non-additive effects. Inclusion of interaction terms, such as between the two most significant factors, `model` and `transmission`, enables better representation of complex dependencies, improving predictive accuracy and overall model fit. This allows the model to capture nuanced relationships that may be missed by considering these predictors individually.*
+
+```{r}
+m7<-lm(log(price)~mileage+year+engineSize+mpg + model + transmission + model*transmission,data=df)
+#summary(m7)  ANNEX 1
+#Residual standard error: 0.1545 on 4692 degrees of freedom
+#Multiple R-squared:  0.908,	Adjusted R-squared:  0.9041 
+#F-statistic: 231.6 on 200 and 4692 DF,  p-value: < 2.2e-16
+```
+
+-   *Despite achieving a 91% explained variability, enhanced homoscedasticity, and improved normality after the interaction addition, lower quantiles in residuals still deviate from normal distribution. While the overall distribution appears linear, influential data points impact the regression, and there's noticeable leverage.*
+
+```{r warning=FALSE}
+par(mfrow=c(2,2))
+plot(m7,id.n=0)
+```
+
+#### *2.5.3.2 Interaction between one factors and one covariate*
+
+-   *Pairing a crucial factor with a relevant covariate in model interaction uncovers nuanced relationships, providing deeper insights into their joint impact on the outcome.*
+
+-   *This model offered the maximum variability till now.*
+
+```{r}
+library(MASS)
+m8<-lm(log(price) ~ mileage+year+engineSize+mpg+model + transmission + model*transmission + mileage*transmission,data=df)
+#summary(m8) 
+#..
+#Residual standard error: 0.1542 on 4690 degrees of freedom
+#Multiple R-squared:  0.9085,	Adjusted R-squared:  0.9046 
+#F-statistic: 230.6 on 202 and 4690 DF,  p-value: < 2.2e-16
+```
+
+```{r warning=FALSE}
+par(mfrow=c(2,2))
+plot(m8,id.n=0)
+```
+
+-   *The shape of the marginal models closely mirrors the underlying data, and the fitted values reveal a more robust model. The convergence of the blue and red datasets, along with their alignment with the same underlying function, underscores a compelling consistency between observed and predicted outcomes.*
+
+```{r warning=FALSE}
+marginalModelPlots(m8)
+```
+
+-   *Which model is better?*
+
+-   *Model m8 is preferred over m7 as it has a lower AIC, suggesting a better balance between goodness of fit and model complexity.*
+
+```{r}
+AIC(m7,m8)
+```
+
+```{r}
+anova(m7,m8)
+```
+
+## *2.6 Model Validation & Unusual-Influential Data Detection*
+
+-   *We will employ the Breusch-Pagan test to evaluate **homoscedasticity**. Since the p-value associated with the test is significantly low, we can reject the null hypothesis of heteroscedasticity. Consequently, this leads us to conclude that the model exhibits homoscedasticity, suggesting that the variance of the residuals is consistent across all levels of the explanatory variables.*
+
+```{r}
+library(lmtest) 
+bptest(m8)
+```
+
+-   *The residual plots for the regression model suggest a good fit. Residuals for mileage, year, mpg, car model, and transmission type are randomly spread, indicating these variables are well accounted for in the model.*
+
+<!-- -->
+
+-   *The lack of clear patterns or systematic trends in these plots suggests that the assumption of **independence** is met.*
+
+```{r}
+residualPlots(m8,id=list(method=cooks.distance(m8),n=10)) 
+```
+
+-   Let's proceed to display the boxplots of the R-student values, Hat values, and Cook's distances for the observations in the model.
+
+```{r}
+par(mfrow=c(1,3)) 
+Boxplot(abs(rstudent(m8)),id=list(labels=row.names(df))) 
+Boxplot(abs(hatvalues(m8)),id=list(labels=row.names(df))) 
+Boxplot(cooks.distance(m8),id=list(labels=row.names(df)))
+```
+
+```{r}
+stu <- which(abs(rstudent(m8))>3.0) 
+cook <- which(abs(cooks.distance(m8))>0.1) 
+hat <- which(abs(hatvalues(m8))>0.2) 
+outs<-unique(stu,cook,hat)
+```
+
+-   *Spotting influential individuals:*
+
+```{r}
+x<-influencePlot( m8, id=c(list="noteworthy",n=5)) 
+obs<-rownames(x) 
+outs<-unique(outs,obs)  
+df_outs<-df[-outs,]
+```
+
+-   Building a model without unusual and influential data:
+
+```{r}
+m9<- update(m8, data=df_outs) 
+#summary(m9) ANNEX
+```
+
+-   The residuals of the model are relatively small, ranging from -0.60962 to 0.44434, with a median very close to zero, indicating that the model's predictions are generally accurate.
+
+-   Many coefficients are not defined due to singularities, which often happens when there are categories with very low/null occurrence or when there's multicollinearity due to the interaction terms.
+
+-   The residual standard error is 0.1235 on 4654 degrees of freedom, which is quite low, indicating a good fit. The model explains a substantial amount of variance, with a Multiple R-squared of 93% , suggesting a strong predictive power. The F-statistic is 336.9 with a p-value of less than 2.2e-16, which is indicative of a highly significant model.
+
+```{r warning=FALSE}
+par(mfrow=c(2,2)) 
+plot(m9,id.n=0)
+```
+
+-   The diagnostic plots for model `m9` indicate a robust linear regression model. The Residuals vs Fitted plot shows a random distribution of points around the horizontal line, suggesting that the model's assumptions of linearity and homoscedasticity are met. The Q-Q Plot supports the assumption of normally distributed residualss. The Scale-Location plot's uniform spread indicates stable variance across predictions, reinforcing the model's homoscedastic nature. Lastly, the Residuals vs Leverage plot reveals no points with high leverage or significant Cook's distances, pointing to an absence of influential outliers. Collectively, these plots suggest that model `m9` is accepted and provides a good fit to the data.
+
+```{r}
+anova(m9)
+```
+
+-   The ANOVA for model m9 shows that all predictors, including mileage, year, engine size, mpg, model, transmission, and their interactions, are highly significant with p-values less than 0.05.
+
+-   Let's review and compare models `m8` and `m9` to decide which model is better suited for our analysis and then choose the one to move forward with. As we can see the best one is `m9`.
+
+```{r warning=FALSE}
+AIC(m9,m8)
+```
+
+# *3. Prediction model for binary target "Audi":*
+
+-   *In the subsequent section of the assignment, our focus shifts to constructing a predictive model for the binary variable 'Audi.' The goal is to develop a model that enables us to estimate the likelihood of a given set of input data being associated with an Audi car or not.*
+
+```{r}
+set.seed(1998)
+
+df<-intial_data[-mouts,]
+x <- sample(1:nrow(df),round(0.70*nrow(df),0))
+
+train <- df[x,]
+test <-df[-x,]
+```
+
+-   *Based on the results based on the following analysis using the `catdes` function, the variables `mpg`, `price`, `tax`, and `year` exhibit statistically significant relationships with the target variable. Therefore, these variables may be considered as potential predictors for the initial binary classification model.*
+
+```{r warning=FALSE}
+res.cat <- catdes(df, num.var = which(names(df)=="Audi"))
+res.cat$quanti.var
+
+```
+
+## *3.1 Initial model*
+
+-   *Based on the MCA and previous results, we will be proceeding to choose the suitable variables and built the initial model:*
+
+```{r}
+b1<-glm(Audi~mpg+tax+year,family="binomial",data=train)
+summary(b1)
+```
+
+-   *The model (b1) examines how mpg, tax, and year affect the likelihood of the outcome variable "Audi." The results show that mpg and year significantly influence the odds of the event, with higher mpg and later years associated with certain outcomes. However, the tax variable doesn't have a significant impact. The model fits the data reasonably well, as indicated by the deviance values, and the AIC is 3504.9, suggesting a decent overall model quality.*
+
+-   *As these VIF values are all close to 1, suggesting that there is no severe multicollinearity among the predictor variables in the model.*
+
+```{r}
+vif(b1)
+```
+
+-   *Again, `mpg` and `year` are valuable predictors in this model, while `tax` does not appear to play a statistically significant role.*
+
+```{r}
+Anova(b1)
+
+```
+
+-   *At this stage, the residual plots show that the variance of the residuals is not constant, which violates the assumption of homoscedasticity.*
+
+```{r}
+residualPlots(b1)
+```
+
+-   *As tax didn't show much influence, we could try to remove it and built a simpler model:*
+
+```{r}
+b2<-glm(Audi~mpg+year,family="binomial"(link = logit),data=train)
+summary(b2)
+```
+
+-   *As we can see the AIC value didn't change much.*
+
+```{r}
+AIC(b1,b2)
+```
+
+-   *While examining the AIC values, it is evident that the inclusion of the variable 'tax has not substantially altered the model. The marginal change in the AIC suggests that this variable may not play a significant role in shaping the model. It appears that 'tax' may be perturbing the model without significantly enhancing its overall performance.*
+
+```{r}
+anova(b1,b2)
+
+```
+
+-   *The residual plots further support the decision to exclude the 'tax' variable from the model. Without 'tax,' the residual graphs exhibit improved characteristics, demonstrating reduced dispersion and less heteroscedastic behavior. This shows better improvement compared to the previous one. The residual plots show a weaker non-linear relationship between the residuals and the fitted values, and the variance of the residuals appears to be more constant.*
+
+```{r}
+residualPlots(b2)
+```
+
+-   *How this model works?*
+
+    -   *The following plots illustrate the probability of a car being an `Audi` based on its `mpg` and `year` values. Notably, a discernible trend emerges: as `mpg` increases, the likelihood of the car being an `Audi` diminishes. Additionally, the passage of time (More recent years) is associated with a decreasing probability of the car being identified as an Audi.*
+
+```{r}
+plot(allEffects(b2))
+```
+
+-   *Even though we will chose the second model, some marginal model plots for `b2` reveal a noticeable lack of overlap between the observed data and the model predictions, indicating a potential need for model refinement or consideration of additional factors.*
+
+```{r warning=FALSE}
+marginalModelPlots(b2)
+```
+
+## *3.2 Adding factors*
+
+-   *Adding new factors based on MCA analysis and the following results maybe enhance our model. We won't take into consideration `f.mpg` as it is derivated from `mpg` so the best candidates are: `f.engineSize`, `fuelType` and `transmission`.*
+
+```{r warning=FALSE}
+catdes(df,17)$test.chi2
+```
+
+-   *Let's add them and build a new model:*
+
+```{r}
+b3<-glm(Audi~mpg+year+f.engineSize+fuelType+transmission,family="binomial",data=train)
+summary(b3)
+```
+
+-   *The regression model b3 suggests again that cars with lower 'mpg' and older 'year' are less likely to be Audi. Additionally, factors such as 'f.engineSizeLarge,' 'fuelTypeHybrid,' 'transmissionf.Trans-SemiAuto,' and 'transmissionf.Trans-Automatic' influence the likelihood.*
+
+-   *The model fits reasonably well, demonstrating a reduction in deviance from the previous model, with an AIC of 3397.3.*
+
+-   *No evidence of collinearity is observed among the predictor variables in the model, indicating that they can independently contribute to explaining the variance in the response variable.*
+
+```{r}
+vif(b3)
+```
+
+-   *The marginal model plot of the linear predictor for `b3` reveal a noticeable improvement of overlap between the observed data and the model predictions, indicating a potential prigress for model refinement after including new factors.*
+
+```{r warning=FALSE}
+marginalModelPlots(b3)
+```
+
+-   All variables are significant for the target.
+
+```{r}
+Anova(b3)
+```
+
+-   Overall, the residual plots show that the model is not perfectly fitting the data. There are some patterns in the residuals that suggest that the model could be improved.
+
+```{r}
+residualPlots(b3)
+```
+
+## *3.3 Adding Interactions*
+
+-   *We will build a test model with all the possible interactions to see which are the most contribuiting to out model.*
+
+-   *Based on AIC values we can see the best interactions to consider.*
+
+```{r warning=FALSE}
+b_test<-glm(Audi~(mpg+year+f.engineSize+fuelType+transmission)*(f.engineSize+fuelType+transmission),family="binomial",data=train)
+summary(b_test)
+```
+
+-   *We can see that `fuelType` does not play a significant role due to to high p-value, even when it interacts with other variables. So we will remove it to shape a new model.*
+
+-   *Also, this test model summary indicate coefficients that could not be estimated due to collinearity, something that we will check in further steps.*
+
+### *3.3.1 Interaction between covariates and factors*
+
+-   *Let's build a model without `fuelType`'s interactions and the strongest possible covariate-factor interactions:*
+
+```{r}
+b4 <- glm(Audi~(mpg+year+ fuelType +f.engineSize+transmission) + (mpg+year)*(f.engineSize+transmission),family="binomial",data=train)
+summary(b4)
+```
+
+-   *Let's check for any possibile collinearity.*
+
+-   *As we can see all the interaction have high GVIF values, higher than 5, so it makes it not acceptable and it is an evidence of high multicollineairity.*
+
+-   *To solve this we will keep one suitable interaction.*
+
+```{r}
+vif(b4)
+```
+
+```{r}
+b5 <- glm(Audi~(mpg+year+fuelType + f.engineSize+transmission + mpg*transmission ),family="binomial",data=train)
+summary(b5)
+```
+
+```{r}
+vif(b5)
+```
+
+-   *Now, all VIF/GVIF values are under 5. So no present collinearity.*
+
+*Let's compare this model with the model without interactions:*
+
+```{r}
+anova(b3,b5)
+```
+
+-   *The lower AIC value in this model compared to the previous one suggests that the added interaction enhances the model's overall fit*
+
+### *3.3.2 Interaction between two factors*
+
+-   *The addition of this new interaction has once again lowered the AIC values, providing evidence of further improvement in the model.*
+
+```{r}
+b6 <- glm(Audi~(mpg+year+fuelType +f.engineSize+transmission + mpg*transmission + transmission*f.engineSize),family="binomial", data=train)
+summary(b6)
+```
+
+-   *Interaction terms inherently complicate the multicollinearity assessment because they represent the combined effect of two used variables, potentially correlating with their individual main effects.*
+
+```{r warning=FALSE}
+vif(b6, type = 'predictor')
+```
+
+-   *Adding the interaction between `transmission` and `f.engineSize` to the model significantly improves the fit, as indicated by the decrease in residual deviance and the highly significant p-value.*
+
+```{r warning=FALSE}
+anova(b5,b6, test="LR")
+```
+
+-   Residuals look much better than the previous model's one.
+
+```{r}
+residualPlots(b6)
+```
+
+## *3.4 Diagnosis & Unusual-Influential Data Detection*
+
+-   *Till now, we built a model predicting the likelihood of a car being an Audi based on factors like mpg, year, engine size category, fuel type, and transmission, including some interactions between these variables. Most variables do significantly influence the prediction, except for few. Possible due to lack of cars with these characteristics in our train dataset. Still, this model seems to have some predictive power.*
+
+```{r}
+summary(b6)
+```
+
+-   All the variables seem to be influential in explaining the variation in the response variable Audi, as indicated by their low p-values.
+
+```{r}
+Anova(b6)
+```
+
+-   *Identifying observations with high leverage, which are those that are unusual or distinct from the rest of the data in terms of the predictor values.*
+
+```{r}
+par(mfrow=c(1,3))
+Boxplot(hatvalues(b6),id=c(labels=row.names(train)))
+Boxplot(abs(rstudent(b6)),id=c(labels=row.names(train)))
+Boxplot(cooks.distance(b6),id=c(labels=row.names(train)))
+
+```
+
+-   *These diagnostic plots are crucial for regression analysis as they help in identifying observations that might be unduly influencing the model, either through high leverage, large influence on the model's predictions, or being outliers in terms of the response variable.*
+-   *Let's remove them and shape our model:*
+
+```{r}
+out1 <- which(abs(rstudent(b6))>1.7);
+out2 <- which(abs(cooks.distance(b6))>0.003);
+out3 <- which(abs(hatvalues(b6))>0.03);
+outs<-unique(c(out1,out2,out3))
+```
+
+-   *Influence plot can helps us identify outliers, influential data points, or observations that have a large impact on the model's coefficients.*
+
+-   *We can observe how certain points stand out noticeably from the clusters formed, with some exerting significant influence.*
+
+```{r}
+par(mfrow=c(1,1));
+outs2 <- influencePlot(b6, id=c(labels=row.names(train)));
+outs2 <- labels(outs2)[[1]];
+outs2 <- as.numeric(outs2);
+outs<-unique(outs,outs2)
+```
+
+```{r}
+b7<-update(b6, data = train[-outs,])
+summary(b7)
+```
+
+-   *The updated regression model `b7` shows improved statistical significance and model fit following the removal of influential observations. This is evident from the reduced AIC and deviances, indicating a better model representation of the underlying data relationship. Significant variables such as 'mpg' and 'year' demonstrate the model's enhanced predictiveness after excluding outliers.*
+
+-   Overall, the residuals are better clustered around the zero line than the previous model where points were more scattered, so it is a good indication. We can see that some variables still have some outliers, so we will make a test to check if they are significant.
+
+```{r}
+residualPlots(b7)
+```
+
+-   This suggests that there are no significant outliers in the model based on the Bonferroni-adjusted p-values.
+
+```{r}
+outlierTest(b7)
+```
+
+-   *Some regions in the model predictions align closely with the data, there are discrepancies in others. This implies that while the model may capture the overall trend, there could be room for refinement to improve its accuracy in certain areas.*
+
+```{r warning=FALSE}
+marginalModelPlots(b7)
+```
+
+## *3.5 Predictive Power & Quality of Fit*
+
+-   *Let's take a look over the final model that we built.*
+
+```{r}
+Anova(b7)
+```
+
+-   *Every variable and interaction term has a highly significant p-value (p \< 0.001 for all), which suggests that they all have a statistically significant effect on the response variable. The presence of very low p-values (especially those less than 2.2e-16) suggests that the model has a good fit in terms of the statistical significance of the predictors.*
+
+-   *We verify the quality of the fit based on the deviance for `b6` (including influential data) and `b7` (excluding influential data).*
+
+```{r}
+1-pchisq(b6$deviance, b6$df.residual)
+1-pchisq(b7$deviance, b7$df.residual)
+
+```
+
+-   *Given that model **`b6`** includes influential data points and model **`b7`** excludes them, the p-values can tell us something about the impact of these points on the model fit. The high p-value for model **`b6`** suggests that even with the influential data included, the model appears to fit the data well; however, the presence of these points might not be dramatically affecting the overall fit.*
+
+-   *For model **`b7`**, the perfect p-value of 1 after excluding influential data may indicate that the model fits the non-influential data exceptionally well, which could be interpreted as the influential data having had a distorting effect on the model.*
+
+-   *Below, we can see Pearson's chi-squared test statistic for model `b7` and `b6` and then computing the corresponding p-value to assess the goodness of fit of the model. A high p-value suggests that the model has a good fit to the observed data.*
+
+```{r}
+X2_b7 <- sum((resid(b7, "pearson")^2))
+1-pchisq( X2_b7, b7$df.res)
+
+X2_b6 <- sum((resid(b6, "pearson")^2))
+1-pchisq( X2_b6, b6$df.res)
+
+
+```
+
+-   *Using the Hosmer-Lemeshow test helps check if our model's predictions match up with actual data, telling us if the fit is good.*
+-   *The p-value (greater than 0.05) suggests that there is no significant difference between the observed and expected outcomes, implying that the model fits the data well.*
+
+```{r warning=FALSE}
+library(ResourceSelection)
+library(ROCR)
+test$fuelType <- factor(test$fuelType, levels = levels(b6$model$fuelType))
+ll <- which( is.finite(test$fuelType) )
+
+pred_test <- predict(b6, newdata=test[ll,], type="response")
+ht <- hoslem.test(as.numeric(test$Audi[ll])-1, pred_test)
+ht
+
+```
+
+-   This indicates that there is not enough evidence to reject the null hypothesis of the test, which states that the model's predictions are not significantly different from the actual values --- in other words, the model fits well.
+
+```{r}
+pred <- prediction(pred_test, test$Audi[ll])
+perf <- performance(pred,measure="tpr",x.measure="fpr")
+plot(perf,colorize=TRUE,type="l")
+abline(a=0,b=1)
+# Área bajo la curva
+AUC <- performance(pred,measure="auc")
+AUCaltura <- AUC@y.values
+# Punto de corte óptimo
+cost.perf <- performance(pred, measure ="cost")
+opt.cut <- pred@cutoffs[[1]][which.min(cost.perf@y.values[[1]])]
+#coordenadas del punto de corte óptimo
+x<-perf@x.values[[1]][which.min(cost.perf@y.values[[1]])]
+y<-perf@y.values[[1]][which.min(cost.perf@y.values[[1]])]
+points(x,y, pch=20, col="red")
+
+```
+
+-   *In our plot, the curve is above the line of no discrimination, which suggests that the model has a good ability to distinguish between the positive class and the negative class, suggests a model that outperforms random guessing, as evidenced by the blue line's ascent above the diagonal line of no discrimination.*
+
+-   *While the curve does not hug the upper left corner, which would indicate a perfect model, it still shows a good balance between sensitivity and the ability to avoid false alarms, implying a reasonable level of accuracy.*
+
+-   *Overall, the plot indicates a model that is statistically useful.*
+
+-   *An AUC score of 0.6459242 indicates that your model has fair discriminative ability to distinguish between the positive and negative classes. While not indicative of a strong predictive model, this level of AUC suggests that the model performs better than random chance.*
+
+```{r}
+# Área bajo la curva
+AUC <- performance(pred,measure="auc")
+AUCaltura <- AUC@y.values
+cat("AUC:", AUCaltura[[1]])
+
+```
+
+## *3.6 Confusion matrix*
+
+```{r}
+audi.est <- ifelse(pred_test<0.4,0,1)
+tt<-table(audi.est,test$Audi[ll]);tt;
+
+```
+
+-   ***What percentage of the model's predictions were correct?***
+
+```{r}
+100*sum(diag(tt))/sum(tt)
+```
+
+-   ***How accurate the model's positive predictions are?***
+
+-   *25.64% means that when the model predicts an instance as positive, about 25.64% of these predictions are correct, and the rest are false positives.*
+
+```{r}
+100*(tt[2,2]/(tt[2,1]+ tt[2,2])) 
+```
+
+-   ***Evaluating the binary classification model:***
+
+```{r}
+prob.audi <- b6$fit[ll]
+audi.est <- ifelse(prob.audi<0.5,0,1)
+tt<-table(audi.est,df$Audi[ll]);tt
+```
+
+-   *The model appears to have a high number of True Negatives and a low number of True Positives, suggesting it is better at identifying 'No Audi' than 'Audi Yes'. This could very well be related to an imbalance in the dataset, where there are far fewer 'Audi' cars compared to 'No Audi' cars.*
+
+-   ***How well the model is at correctly identifying negative instances?***
+
+-   *A rate of 79.35% True Negatives suggests that the model is quite effective at correctly identifying instances of the negative class. It indicates a strong ability of the model to recognize situations where the condition it's trying to predict is absent.*
+
+```{r}
+100*tt[1,1]/sum(tt)
+```
+
+-   ***How well the model is at correctly identifying positive instances?***
+
+-   *The precision of 28.57% indicates that the model's ability to correctly identify positive instances is limited, and a significant number of its positive predictions are actually false positives.*
+
+```{r}
+100*(tt[2,2]/(tt[2,1]+ tt[2,2])) 
+```
+
+***Conclusion:***
+
+-   *The model achieved an accuracy of approximately 77.31%, correctly identifying 'No Audi' instances most of the time but struggling with 'Audi Yes' predictions, leading to a precision of about 28.57%. This pattern suggests a potential class imbalance issue, where the model is more exposed to 'No Audi' instances. The trade-off between capturing more positive instances versus maintaining overall accuracy was evident. . This could very well be related to an imbalance in the dataset, where there are far fewer 'Audi' cars compared to 'No Audi' cars.*
+
+# *4. Annex*
+
+-   *m7*
+
+```{r}
+summary(m7)
+```
+
+-   *m8*
+
+```{r}
+summary(m8)
+```
+
+-   *m9*
+
+```{r}
+summary(m9)
+```

@@ -1,0 +1,2350 @@
+---
+title: "Used Car Prices Case Study: From Multivariant Data Analysis to Predictive Modeling"
+author: "Soukaïna Mahboub Mehboub"
+date: ""
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: TRUE
+    toc_depth: 4
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Introduction
+
+This comprehensive report encapsulates a rigorous analytical journey through a vast dataset of UK used car data. Beginning with meticulous data validation, including a thorough Univariate Descriptive Analysis for each variable, the narrative unfolds to detail strategic data imputation for both numerical and categorical variables. The exploration deepens with a discerning Feature Selection process, sharpening the focus for both numeric and binary targets. Advanced multivariate techniques, such as Principal Component and Multiple Correspondence Analysis, further refine the dataset, culminating in a robust clustering for population segmentation. The crux of the report is the meticulous Model Building process, adeptly balancing statistical rigor with practical insights for numeric and binary responses, reinforced by stringent model validation techniques.
+
+This report presents an exploratory analysis of the 100,000 UK used car dataset. The dataset includes information from four major car manufacturers: Audi, BMW, Mercedes, and Volkswagen. The data consists of details such as car model, registration year, price, gearbox type, mileage, engine fuel, tax, consumption in miles per gallon, and engine size.
+
+To make the analysis manageable and insightful, a random sample of 5,000 records has been selected from this extensive dataset. 
+
+Data from: <https://www.kaggle.com/adityadesai13/used-car-dataset-ford-and-mercedes>
+
+# 2. Validation of the Data Set
+
+## 2.1. Data Preparation
+
+As our initial step, we'll start by downloading the essential packages and libraries required for our project. It's crucial to ensure that these packages are properly installed to avoid any issues later on. Once that's accomplished, our next task involves creating a subset of our dataset with 5000 specific observations. It's important to note that during this process, we will maintain the complete set of original variables, ensuring that no data is lost.
+
+```{r warning=TRUE, include=FALSE}
+# Set the directory 
+setwd("C:/Users/Soukaïna/Desktop/ADEI/Final")  
+filepath<-"C:/Users/Soukaïna/Desktop/Final/"   
+# Load Required Packages: to be increased over the course 
+options(contrasts=c("contr.treatment","contr.treatment")) 
+requiredPackages <- c("effects","FactoMineR","car", "factoextra","RColorBrewer","ggplot2","dplyr","ggmap","ggthemes","knitr") 
+package.check <- lapply(requiredPackages, FUN = function(x) {   if (!require(x, character.only = TRUE)) {     install.packages(x, dependencies = TRUE)     
+library(x, character.only = TRUE)   } }) 
+#verify they are loaded 
+search() 
+```
+
+We'll now upload the data and proceed to create our sample by randomly selecting 5000 records.
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+df1 <- read.table("audi.csv",header=T, sep=",") 
+df1$manufacturer <- "Audi" 
+df2 <- read.table("bmw.csv",header=T, sep=",")
+df2$manufacturer <- "BMW" 
+df3 <- read.table("merc.csv",header=T, sep=",") 
+df3$manufacturer <- "Mercedes" 
+df4 <- read.table("vw.csv",header=T, sep=",") 
+df4$manufacturer <- "VW"  
+#Merging df1, df2, df3 and df4  
+df <- rbind(df1, df2, df3, df4) 
+do.call(rbind, df)  
+head(df)  
+# Sample 5000 random indices from the number of rows in df  
+set.seed(07041985) 
+df <- df[sample(nrow(df), size=5000), ] 
+```
+
+-   **Sample overview**: Dimension of the dataframe (number of rows and columns), the names of variables and brief statistical summary (including measures such as mean, median, quartiles, and counts for each variable).
+
+```{r echo=TRUE}
+str(df) # Variable types 
+dim(df) # Displays the sample size 
+names(df) # Displays the names of the sample variables 
+summary(df) 
+```
+
+```{r include=FALSE}
+# Some useful functions 
+calcQ <- function(x) {   
+  s.x <- summary(x)   
+  iqr<-s.x[5]-s.x[2]   
+  list(souti=s.x[2]-3*iqr, 
+       mouti=s.x[2]-1.5*iqr, 
+       min=s.x[1], q1=s.x[2], q2=s.x[3],         
+       q3=s.x[5], max=s.x[6], 
+       mouts=s.x[5]+1.5*iqr, 
+       souts=s.x[5]+3*iqr ) }  
+countNA <- function(x) {   
+  mis_x <- NULL   
+  for (j in 1:ncol(x)) {
+    mis_x[j] <- sum(is.na(x[,j])) }   
+    mis_x <- as.data.frame(mis_x)   
+    rownames(mis_x) <- names(x)   
+    mis_i <- rep(0,nrow(x))   
+  for (j in 1:ncol(x)) {
+    mis_i <- mis_i + as.numeric(is.na(x[,j])) }   
+    list(mis_col=mis_x,mis_ind=mis_i) }  
+countX <- function(x,X) {   
+  n_x <- NULL   
+  for (j in 1:ncol(x)) {
+    n_x[j] <- sum(x[,j]==X) }   
+  n_x <- as.data.frame(n_x)   
+  rownames(n_x) <- names(x)   
+  nx_i <- rep(0,nrow(x))   
+  for (j in 1:ncol(x)) {
+    nx_i <- nx_i + as.numeric(x[,j]==X) 
+  }   
+  list(nx_col=n_x,nx_ind=nx_i) }
+```
+
+-   Prior to examining individual variables, we'll establish counters to track missing values, errors, and outliers within the vectors.
+
+-   We will also detect all the missing values in the dataframe and store them in two vectors (initial missings for the individuals and for each variable).
+
+```{r echo=TRUE}
+mis1<-countNA(df) 
+imis<-mis1$mis_ind 
+#mis1$mis_col 
+# Number of missings for the current set of variables 
+jmis<-mis1$mis_col$mis_x  
+iouts<-rep(0,nrow(df))  
+# rows - trips 
+jouts<-rep(0,ncol(df))  
+# columns - variables   
+ierrs<-rep(0,nrow(df))  
+# rows - trips 
+jerrs<-rep(0,ncol(df))  
+# columns - variables  
+```
+
+-   Categorical variables should be converted to factors for appropriate analysis to enhance data analysis and enabling effective grouping, summarization, and visualization.
+
+Model (1)
+
+```{r include=FALSE}
+df$model<-factor(paste0(df$manufacturer,"-",df$model)) 
+levels(df$model)
+```
+
+Transmission (4)
+
+```{r echo=TRUE}
+df$transmission <- factor(df$transmission) 
+levels( df$transmission ) 
+df$transmission <- factor( df$transmission, levels = c("Manual","Semi-Auto","Automatic"),labels = paste0("f.Trans-",c("Manual","SemiAuto","Automatic")))
+```
+
+FueltType (6)
+
+```{r echo=TRUE}
+df$fuelType <- factor( df$fuelType )
+```
+
+Manufacturer (10)
+
+```{r echo=TRUE}
+df$manufacturer <- factor( df$manufacturer )
+```
+
+## 2.2 Exploratory Data Analysis
+
+### 2.2.1 Variable missings, errors & outliers
+
+Model (1):
+
+-   In this variable, the presence of numerous car models makes it challenging to identify missing values through a barplot. To tackle this, we will primarily utilize functions such as table() and is.na() to assess the distribution of cars across each model and employ is.na() for missing value detection.
+
+```{r echo=TRUE}
+summary(df$model)
+barplot(table(df$model), main = "Model Frequencies", xlab = "Model", ylab = "Frequency")
+```
+
+-   Detecting any missing values: "False" indicates no missing values.
+
+```{r echo=TRUE}
+#Detecting any missing values as previous barplot cannot show missing values:
+na_values <- is.na(df$model)
+any(na_values)
+```
+
+Transmission (2):
+
+-   Zero missing values, and cars are nearly evenly distributed across three categories. No errors or outliers are present (as these three are the only three possible transmission types in cars).
+
+```{r echo=TRUE}
+summary(df$transmission)
+
+
+piepercent<-round(100*(table(df$transmission)/nrow(df)),dig=2); piepercent
+pie(table(df$transmission),col=heat.colors(3),labels=paste(piepercent,"%"))
+legend("topright", levels(df$transmission), cex = 0.8, fill = heat.colors(3))
+```
+
+FuelType (6):
+
+-   As we can see, the summary reveals that there are 15 NA's in this variable, and very few cars are hybrid
+
+-   At this stage we will consider missing values as electrical cars no matter their engine-size value (This assumption will help us analyze the "engineSize" variable later).
+
+```{r echo=TRUE}
+summary(df$fuelType)
+
+#Mark NA's as Electric car
+na_rows <- which(df$fuelType == 'Other')
+#convert variable back to character (to avoid warnings)
+df$fuelType <- as.character(df$fuelType)
+df$fuelType[na_rows] <- 'Electric'
+#convert variable back to factor
+df$fuelType <- as.factor(df$fuelType)
+```
+
+FuelType Distribution:
+
+```{r echo=TRUE}
+piepercent<-round(100*(table(df$fuelType)/nrow(df)),dig=2); piepercent
+pie(table(df$fuelType),col=heat.colors(4),labels=paste(piepercent,"%"))
+legend("topright", levels(df$fuelType), cex = 0.8, fill = heat.colors(4))
+```
+
+Manufacturer (10):
+
+-   Every vehicle in our sample is sourced from one of the four manufacturers that contributed to our dataset. So we've detected no missing values. Since our sample was selected randomly, we have a slightly higher representation of VW and Mercedes cars compared to Audi and BMW. For this variable, no missing, errors, or outliers data has been identified.
+
+```{r echo=TRUE}
+summary(df$manufacturer)
+piepercent<-round(100*(table(df$manufacturer)/nrow(df)),dig=2); piepercent
+pie(table(df$manufacturer),col=heat.colors(4),labels=paste(piepercent,"%"))
+legend("topright", levels(df$manufacturer), cex = 0.8, fill = heat.colors(4))
+```
+
+-   We will consistently detect missing outliers in all numerical variables using the same method, which involves identifying both low and high outliers. This approach ensures that the R script remains adaptable to changes in datasets or samples without requiring modifications.
+
+Year (2):
+
+-   The summary indicates that the 'year' values fall within the valid range of 1998 to 2020, demonstrating the absence of errors or inconsistencies. Given that 'year' is typically represented as an integer, we'll ensure any potential decimal values are rounded to maintain data integrity.
+
+```{r echo=TRUE}
+summary(df$year)
+
+# Outlier detection
+Boxplot(df$year)
+var_out<-calcQ(df$year)
+abline(h=var_out$souts,col="red")
+abline(h=var_out$souti,col="red")
+
+sel <- which(df$year <= var_out$souti);
+iouts[sel]<-iouts[sel]+1
+jouts[2]<-jouts[2]+length(sel)
+df[sel, "year"] <- NA
+
+sel <- which(df$year >= var_out$souts);
+iouts[sel]<-iouts[sel]+1
+jouts[2]<-jouts[2]+length(sel)
+df[sel, "year"] <- NA
+
+hist(df$year)  #Distribution of "year"
+```
+
+Price (3):
+
+-   No missing values, no errors identified, and all values fall within a reasonable range, reflecting real car prices in the current market. We'll focus on excluding only the most extreme outliers.
+
+-   As "price" is out Target Variable, we won't do imputations, so we won't assign NA value to outliers.
+
+```{r echo=TRUE}
+summary(df$price)
+
+# Outlier detection
+boxplot(df$price)
+var_out<-calcQ(df$price)
+abline(h=var_out$souts,col="red")
+abline(h=var_out$souti,col="red")
+
+sel <- which(df$price <= var_out$souti);
+iouts[sel]<-iouts[sel]+1
+jouts[3]<-jouts[3]+length(sel)
+
+
+sel <- which(df$price >= var_out$souts);
+iouts[sel]<-iouts[sel]+1
+jouts[3]<-jouts[3]+length(sel)
+
+hist(df$price)  #Distribution of "price"
+```
+
+Mileage (5):
+
+-   No missing values or errors are present, given the logical and positive range of all mileage values. Our focus will be on the exclusion of extreme outliers.
+
+```{r echo=TRUE}
+summary(df$mileage)
+
+# Outlier detection
+Boxplot(df$mileage)
+var_out<-calcQ(df$mileage)
+abline(h=var_out$souts,col="red")
+abline(h=var_out$souti,col="red")
+
+sel <- which(df$mileage >= var_out$souts);
+iouts[sel]<-iouts[sel]+1
+jouts[5]<-jouts[5]+length(sel)
+df[sel, "mileage"] <- NA
+
+sel <- which(df$mileage <= var_out$souti);
+iouts[sel]<-iouts[sel]+1
+jouts[5]<-jouts[5]+length(sel)
+df[sel, "mileage"] <- NA
+
+hist(df$mileage)  #Distribution of "mileage"
+```
+
+Tax (7):
+
+-   The summary reveals that there are instances of zero tax values. This is a possibility in specific cases within the UK, considering the dataset's origin.
+
+-   The tax values are within expected ranges, so our primary concern is identifying extreme outliers.
+
+```{r echo=TRUE}
+summary(df$tax)
+
+# Outlier detection
+Boxplot(df$tax)
+var_out<-calcQ(df$tax)
+abline(h=var_out$souts,col="red")
+abline(h=var_out$souti,col="red")
+
+sel <- which(df$tax >= var_out$souts);
+iouts[sel]<-iouts[sel]+1
+jouts[7]<- jouts[7] +length(sel)
+df[sel, "tax"] <- NA
+
+
+sel <- which(df$tax <= var_out$souti);
+iouts[sel]<-iouts[sel]+1
+jouts[7]<- jouts[7] +length(sel)
+df[sel, "tax"] <- NA
+
+hist(df$tax)  #Distribution of "tax"
+```
+
+MPG (8):
+
+-   As we can observe from the summary, there are no missing values in this variable. However, it's worth noting that some values are significantly higher than what would be considered normal for miles per gallon (mpg), even though they fall within the possible range. To identify and address these extreme outliers, we will proceed with outlier detection.
+
+```{r echo=TRUE}
+
+summary(df$mpg)
+
+# Outlier detection
+Boxplot(df$mpg)
+var_out<-calcQ(df$mpg)
+abline(h=var_out$souts,col="red")
+abline(h=var_out$souti,col="red")
+
+var_out$souts
+var_out$souti
+
+sel <- which(df$mpg >= var_out$souts);
+
+iouts[sel]<-iouts[sel]+1
+jouts[8]<- jouts[8] +length(sel)
+df[sel, "mpg"] <- NA
+
+
+sel <- which(df$mpg <= var_out$souti);
+
+iouts[sel]<-iouts[sel]+1
+jouts[8]<- jouts[8] +length(sel)
+df[sel, "mpg"] <- NA
+
+hist(df$mpg)  #Distribution of "mpg"
+```
+
+Engine size (9):
+
+-   Through summary, we can see that we have no missing values here. However, we spotted some errors. When a car's engine size is listed as 0, it usually means the car is electric. However, some cars, like the Mercedes C class, might also show 0 as the engine size, but they are not electric; this could be a data issue. It is also an error to find Hybrid, Petrol and Diesel with an engine size 0.
+
+```{r echo=TRUE}
+summary(df$engineSize)
+
+sel <- which(df$engineSize == 0 & (df$model == "Mercedes- C Class" | df$fuelType != "Electric")) 
+
+ierrs[sel]<-ierrs[sel]+1
+jerrs[9]<-length(sel)
+df[sel,"engineSize"]<-NA
+
+# Outlier detection
+Boxplot(df$engineSize)
+var_out<-calcQ(df$engineSize)
+abline(h=var_out$souts,col="red")
+abline(h=var_out$souti,col="red")
+
+sel <- which(df$engineSize >= var_out$souts);
+iouts[sel]<-iouts[sel]+1
+jouts[9]<- jouts[9] +length(sel)
+df[sel, "engineSize"] <- NA
+
+
+sel <- which(df$engineSize <= var_out$souti);
+iouts[sel]<-iouts[sel]+1
+jouts[9]<- jouts[9] +length(sel)
+df[sel, "engineSize"] <- NA
+
+
+hist(df$engineSize)  #Distribution of "engineSize"
+```
+
+### 2.2.3 Summary of variable analysis
+
+-   As we can we see, initially we have no missing values to begin it.
+
+```{r echo=TRUE}
+labels <- colnames(df[1:10])
+# Barplot
+barplot(mis1$mis_col$mis_x, names.arg = labels, main = "Missings Per Variable", col = "grey", ylim = c(0, max(mis1$mis_col$mis_x) + 1), las = 2)
+```
+
+-   Only 12 errors in engineSize, due to some few models and electric cars.
+
+```{r echo=TRUE}
+jerrs
+# Barplot
+barplot(jerrs[1:10], names.arg = labels, 
+        main = "Barplot with Errors per Variable",
+        xlab = "Variables", ylab = "Errors",
+        col = "grey", 
+        ylim = c(0, max(jerrs) + 1),
+        las = 2)
+```
+
+-   Some scattered outliers in few variables.
+
+```{r echo=TRUE}
+jouts
+# Barplot
+barplot(jouts[1:10], names.arg = labels, 
+        main = "Barplot with Outliers per Variable",
+        xlab = "Variables", ylab = "Outliers",
+        col = "grey", 
+        ylim = c(0, max(jouts) + 1),
+        las = 2)  
+```
+
+### 2.2.3 Individuals' missings, errors & outliers
+
+-   Missings
+
+```{r echo=TRUE}
+table(imis)
+barplot(table(imis), main = "Barplot with Missings per Individuals",
+        xlab = "Number of missings", ylab = "Number of Individuals",
+        col = "grey",
+        ylim = c(0,5000))
+```
+
+-   Errors:
+
+```{r echo=TRUE}
+table(ierrs)
+barplot(table(ierrs), main = "Barplot with Errors per Individuals",
+        xlab = "Number of Errors", ylab = "Number of Individuals",
+        col = "grey",
+        ylim = c(0,5000))
+```
+
+-   Outliers
+
+```{r echo=TRUE}
+
+table(iouts)
+barplot(table(iouts), main = "Barplot with Outliers per Individuals",
+        xlab = "Number of Outliers", ylab = "Number of Individuals",
+        col = "grey",
+        ylim = c(0,5000))
+```
+
+### 2.2.4 Summary of inidividuals' analysis
+
+Summary and totals of missings, errors and outliers:
+
+```{r echo=TRUE}
+# TOTAL OF INDIVIDUAL MISSINGS, ERRORS, OUTLIERS: 
+total_missings <- sum(imis); total_errors <- sum(ierrs); total_outliers <- sum(iouts);
+total_missings; total_errors; total_outliers;
+```
+
+## 2.4 Correlation between variables
+
+-   We observe a strong correlation between 'year' and 'mileage,' which is intuitively sensible since both increase as years pass and the vehicle is driven. Additionally, the 'price' variable shows noteworthy correlations with 'year' and 'engine size'.º
+
+```{r echo=TRUE}
+# dataset with numerical variables and individuals without NA values.
+
+df_temp <- na.omit(df)
+numerical_df <- df_temp[, sapply(df_temp, is.numeric)]
+numerical_df <- numerical_df[1:6]
+head(numerical_df)
+
+# Coorelation matrix 
+correlation_matrix <- cor(numerical_df)
+
+# Print the correlation matrix
+library(corrplot)
+corrplot(correlation_matrix)
+```
+
+# 3 Imputation & Discretization & Multivariant Outliers Detection
+
+-   We will refrain from applying imputation to any missing values in the "price" variable. This variable represents the target variable in our study, and altering or filling in missing values in this variable could introduce bias into our data, potentially skewing the results.
+
+**Note: in our case, we have no missings at all.**
+
+```{r include=FALSE}
+library(missMDA)
+
+```
+
+## 3.1 Imputation with Numerical Variables
+
+As we can see, missing values are substituted with new values:
+
+```{r echo=TRUE}
+library(missMDA)
+quantitative_vars<-names(df)[c(2,3,5,7:9)]
+
+summary(df[,quantitative_vars])
+
+res.input<-imputePCA(df[,quantitative_vars],ncp=5)
+
+summary(res.input$completeObs)
+
+df[,"year"] <- res.input$completeObs[,"year"]
+
+df[,"price"] <- res.input$completeObs[,"price"]
+
+df[,"mileage"] <- res.input$completeObs[,"mileage"]
+
+df[,"tax"] <- res.input$completeObs[,"tax"]
+
+df[,"mpg"] <- res.input$completeObs[,"mpg"]
+
+df[,"engineSize"] <- res.input$completeObs[,"engineSize"]
+```
+
+## 3.2 Imputation to factors (Categorical Variables)
+
+```{r echo=TRUE}
+categorical_vars<-names(df)[c(1,4,6,10)]
+summary(df[,categorical_vars])
+
+#nb <- estim_ncpMCA(df[, categorical_vars],ncp.max=25) #it stabilizes at ncp = 7
+
+X<-imputeMCA(df[,categorical_vars],ncp=7)
+summary(X$completeObs)
+
+df[,"model"] <- X$completeObs[,"model"]
+df[,"transmission"] <- X$completeObs[,"transmission"]
+df[,"fuelType"] <- X$completeObs[,"fuelType"]
+df[,"manufacturer"] <- X$completeObs[,"manufacturer"]
+                                                                                                                   
+
+```
+
+## 3.3 Discretization
+
+Discretization can be important for profiling as it enhances data interpretability, reduces noise, and making the profiling process more effective and more understandable.
+
+```{r echo=TRUE}
+# f.Year :
+table(df$year, useNA="always")
+quantile(df$year,seq(0,1,0.25))
+min(df$year)
+year_labels <- as.character(seq(2008, 2020))
+year_breaks <- seq(2007, 2020)
+df$f.year <- cut(df$year, breaks = year_breaks, labels = year_labels, include.lowest = TRUE)
+
+summary(df$f.year)
+table(df$f.year, useNA="always")
+barplot(summary(df$f.year),main="f.year Category Barplot",col = "Grey")
+
+# f.Price:
+summary(df$price)
+quantile(df$price,seq(0,1,0.25),na.rm=TRUE)
+
+df$f.price <- cut(df$price, breaks = c(min(df$price), 13994.5  , 19500   , 26499.0 , max(df$price)), labels = c("Low-priced", "Affordable", "Moderately priced", "Expensive"), include.lowest = TRUE)
+table(df$f.price)
+barplot(summary(df$f.price),main="f.Price Category Barplot",col = "Grey")
+
+
+# f.Mileage: Usage. 
+summary(df$mileage)
+quantile(df$mileage,seq(0,1,0.25),na.rm=TRUE)
+
+mileage_labels <- c("New/Nearly New", "Used", "Old", "Very Old")
+mileage_intervals <- c(min(df$mileage), 5866.5  , 16697.5, 33645.5, max(df$mileage))
+df$f.miles <- cut(df$mileage, breaks = mileage_intervals, labels = mileage_labels, include.lowest = TRUE)
+table(df$f.miles)
+barplot(summary(df$f.miles),main="f.Milage (Usage) Barplot",col = "Grey")
+table(df$f.miles,useNA="always")
+
+
+
+# f.Tax: 
+summary(df$tax)
+quantile(df$tax,seq(0,1,0.25),na.rm=TRUE)
+
+tax_labels <- c("Low", "Medium", "High")
+tax_intervals <- c(min(df$tax), 145, 147.19  , max(df$tax))
+df$f.tax <- cut(df$tax, breaks = tax_intervals, labels = tax_labels, include.lowest = TRUE)
+barplot(summary(df$f.tax),main="f.Tax Band Barplot",col = "Grey")
+
+
+# MPG Category: Consumption Category
+summary(df$mpg)
+quantile(df$mpg,seq(0,1,0.25),na.rm=TRUE)
+
+mpg_labels <- c("Low", "Moderate", "High", "Very High")
+mpg_intervals <- c(min(df$mpg), 44.10, 52.30, 60.20, max(df$mpg))
+df$f.mpg <- cut(df$mpg, breaks = mpg_intervals, labels = mpg_labels, include.lowest = TRUE)
+
+table(df$f.mpg)
+barplot(summary(df$f.mpg),main="f.MPG Barplot - (Consumption) Barplot",col = "Grey")
+
+
+
+# Engine Size Category: Small, Medium, Large
+summary(df$engineSize)
+quantile(df$engineSize,seq(0,1,0.25),na.rm=TRUE)
+
+
+engineSize_labels <- c("Small", "Medium", "Large")
+engineSize_intervals <- c(min(df$engineSize), 1.5, 2.0, max(df$engineSize))
+df$f.engineSize <- cut(df$engineSize, breaks = engineSize_intervals, labels = engineSize_labels, include.lowest = TRUE)
+barplot(summary(df$f.engineSize),main="f.EngineSize Barplot",col = "Grey")
+
+
+```
+
+## 3.4 Multivariant Outliers Detection
+
+-   We are applying the Mahalanobis method to identify multivariate outliers
+
+-   We excluded `tax` as computing fails when it is included.
+
+```{r}
+library(mvoutlier) 
+library(chemometrics) 
+vars<-c("year","price", "mileage", "mpg", "engineSize")  
+mout<-aq.plot(df[,vars],delta=qchisq(0.99, df= 6), alpha=0.01)   
+mout<-Moutlier(df[,vars],quantile = 0.99, plot = TRUE) 
+ll<-which(mout$md > mout$cutoff) 
+
+```
+
+# 4. Profiling
+
+```{r echo=TRUE}
+library(FactoMineR)
+summary(df$price)
+
+
+# Binary Target: Audi?
+df$Audi<-ifelse(df$manufacturer == "Audi",1,0)
+df$Audi<-factor(df$Audi,labels=paste("Audi",c("No","Yes")))
+summary(df$Audi)
+
+# Pie
+piepercent<-round(100*(table(df$Audi)/nrow(df)),dig=2); piepercent
+pie(table(df$Audi),col=heat.colors(2),labels=paste(piepercent,"%"))
+legend("topright", levels(df$Audi), cex = 0.8, fill = heat.colors(2))
+
+# Histogram for Price
+hist(df$price, main = "Price Distribution", xlab = "Price")
+
+```
+
+-   With Numeric Target "Price":
+
+-   Clearly, each quantitative variable is correlated to "price," either positively or negatively.
+
+-   In simple terms, when the year and engine specifications go up, the price tends to rise. On the other hand, an increase in mileage and mpg typically leads to a decrease in price. This straightforward relationship helps us understand how these factors impact pricing.
+
+```{r echo=TRUE}
+res.condes<- condes(df, 3)
+
+res.condes$quanti
+```
+
+-   In this context, it's evident that the price significantly influences the choice of car category. As the price increases, certain car models become increasingly likely choices compared to others. The same thing happens with the type of transmission.
+
+```{r echo=TRUE}
+res.condes$quali
+```
+
+There is a lot of information to deduce from this output:
+
+-   The price is much likely higher if it's from 2020 year, and if the MPG is categorized as Low, and the engineSize is Large, if the car is New/Likely New (based on mileage discretization),
+
+-   The most expensive cars are: BMW- 8 Series, Audi- R8, VW- California, Audi- Q8, BMW- X6...
+
+-   Usually cars that are classed as hybrid tend to be more expensive.
+
+-   We can also check the cheapest car models that usually are manual transmission and categorized as affordable.
+
+```{r echo=TRUE}
+df_cat <- as.data.frame(res.condes$category)
+df_cat[order(df_cat$Estimate, decreasing = TRUE),]
+
+```
+
+Profiling binary factor "Audi?" it with all other variables:
+
+```{r warning=FALSE}
+res.catdes <- catdes(df,17,proba = 0.05)
+```
+
+We observe a relatively weak correlation between 'Audi' and the other quantitative variables. However, the presence of very low p-values suggests that there is a connection. It's important to note that while this connection exists, the limited sample size may prevent us from establishing it.
+
+```{r echo=TRUE}
+res.catdes$quanti.var
+```
+
+Again, we can deduce plenty of information:
+
+-   A robust link emerges between this binary variable and the categories. Notably, Audi cars are distinctly associated with the 'Medium Size' engines, 'Low' mpg ratings, and the 'Expensive' category. Furthermore, they tend to favor manual transmission and 'Petrol' as their preferred fuel type.
+
+# 5. Principal Component Analysis
+
+## 5.1 Eigenvalues and dominant axes analysis:
+
+-   We are asked to perform a PCA taking into account also supplementary that can be quantitative and/or categorical.
+
+-   We previously applied imputation on our dataframe, and now will apply PCA, passing all categorical/factor variable as qualitative supplementary variables, and pass the target variable "price" is our quantitative supplementary variable. We will also pass the detected multivariant outliers as supplementary individuals to avoid any anomalies.
+
+We deduce from the following graph of variables and the results:
+
+-   The two first dimensions explain the 70% of inertia.
+
+-   The first component agglutinates 42.39% of variability meanwhile the second component has 28.47% of variability. We can sense that more than two\--thirds of the variability are already inside the first and second component.
+
+-   The variables "mileage", "year" and "price" have a significant impact on the first component, meanwhile "tax" and "engineSize" have an important effect on the second component.
+
+-   The variable "mpg" has an insignificant impact on both component compared to the rest.
+
+-   "mileage" and "year" are negatively correlated.
+
+```{r}
+library(FactoMineR)
+res.pca<-FactoMineR::PCA(df, quali.sup=c(1,4,6,10:17), quanti.sup= c(3), ind.sup =ll)
+
+```
+
+-   The following graph shows the relationship between individuals with the two axes. Proximity of points in the scatter plot indicates similarity between individuals. Individuals closer together are more similar in terms of the variables used in the analysis.
+
+```{r}
+plot.PCA(res.pca,choix=c("ind"),invisible=c("ind"))
+
+
+```
+
+-   As we can see below, 5 components have been created. The choice of retaining the most informative axes in a PCA analysis can be made using various methods, including but not limited to the Kaiser criterion and the Elbow method. These approaches assist in determining the optimal number of principal components to capture and retain, contributing to a more robust interpretation of the underlying patterns in the data.
+
+**Kaiser Criteria:**
+
+-   The PCA function yields an eigenvector with normalized eigenvalues. Employing the Kaiser criterion, we opt to retain the first two components, given that their eigenvalues surpass the mean of all components' eignevalues.
+
+-   The two first componenets meet this criteria and have 70.86% of cumulative percentage of variance. This strategic selection ensures a focused representation of the data's principal components, enhancing the interpretability of the analysis.
+
+```{r}
+res.pca$eig
+```
+
+```{r}
+barplot(res.pca$eig[,1],main="Eigenvalues",names.arg=paste("dim",1:nrow(res.pca$eig)))
+```
+
+**Elbow Method:**
+
+-   The following graph shows the Eignevalues in a downward curve, from highest to lowest, and by using the Elbow Method we can determine the number of significant axes in this case, we would retain 3 axes.
+
+-   The three components englobe 86,6% of the data variability.
+
+```{r}
+library("factoextra")
+fviz_eig(res.pca, addlabels = TRUE)
+```
+
+## 5.2 Interpreting the axes: Variables point of view coordinates, quality of representation, contribution of the variables:
+
+**Variables Coordinates:**
+
+-   The values in this matrix indicate the strength of the relationship between each variable and the principal components through coordinates values. Notably, the first principal component (Dim.1) exhibits a strong correlation with the 'year' and 'mileage' variables. This also implies that Dim.1 captures information variability related to the year and mileage of the vehicles. Additionally, the second principal component (Dim.2) shows a notable positive correlation with 'tax' and 'engineSize,' while being negatively correlated with 'mpg.'
+
+```{r}
+res.pca$var$cor
+```
+
+**Quality of representation:**
+
+-   To measure the quality of representation of each variable on the principal components we use the squared cosines. It provides insights into how well each variable is represented in the reduced-dimensional space created by the principal components.
+
+-   In the first dimension, both "year" and "mileage" exhibit strong representation, indicating that they play a substantial role in shaping this principal component. Conversely, "tax" contributes minimally in this specific dimension. This insight underscores the differential impact of these variables on the overall structure captured by the principal components, emphasizing the significance of "year" and "mileage" in this particular dimension.
+
+-   When it comes to the second dimension, "tax," "mpg," and "engineSize" showcase some representation, contributing to the structure of the second principal component. However, it's important to note that "year" and "mileage" have limited influence in this specific dimension.
+
+```{r}
+res.pca$var$cos2[,1:2]
+```
+
+**Contribution of variables:**
+
+-   Analyzing variable contributions provides insights into which variables strongly influence the selected axes. This information aids in interpreting the meaning of each dimension and helps focus on key variables.
+
+```{r}
+res.pca$var$contrib[,1:2]
+```
+
+-   In the context of the first principal component, it's evident that "year" and "mileage" exhibit the highest contributions, aligning with our earlier observation from squared cosines. Conversely, "tax" and "engine size" make minimal contributions, indicating their limited impact on this principal component.
+
+-   Regarding the second principal component, "tax" and "engine size" are contributing more significantly compared to other variables. In contrast, "year" and "mileage" show comparatively lower contributions, underscoring their reduced influence on the second principal component. This also matches with previous result we got during the quality representations of variables.
+
+To double-check our earlier findings, we can examine the correlation between each variable and the principal components. This additional step ensures consistency with our previous results:
+
+```{r}
+res.des<-dimdesc(res.pca)
+res.des$Dim.1$quanti
+```
+
+## 5.3 Individuals point of view
+
+-   Individual analysis in PCA is crucial for understanding how each observation or individual contributes to the overall variation in the dataset and how they are positioned in the reduced-dimensional space defined by the principal components.
+
+**Coordinates analysis:**
+
+-   Examining these coordinates helps in visualizing the distribution of individuals in the PCA plot and understanding the relationships and patterns in the data captured by the principal components.
+
+-   Examining the top records based on Dim.1 reveals that individuals with IDs 40051, 39715, and 7951 have notably high positive scores on this component. This suggests that these individuals contribute significantly to the variance captured by Dim.1. On the other hand, reviewing the top records based on Dim.2, individuals with high positive values, indicating their substantial influence on the variability captured by Dim.2.
+
+```{r}
+head(res.pca$ind$coord[order(-res.pca$ind$coord[, 1]), 1:2])
+```
+
+```{r}
+head(res.pca$ind$coord[order(-res.pca$ind$coord[, 2]), 1:2])
+```
+
+**Quality of representation:**
+
+-   Analyzing the top records based on Dim.1 squared cosines, it is evident there are individuals that have extremely high values close to 1. This indicates a strong and accurate representation of these individuals along Dim.1. Similarly, reviewing the top records based on Dim.2 squared cosines, there are individuals that exhibit high values close to 1, signifying an excellent representation along Dim.2.
+
+```{r}
+head(res.pca$ind$cos2[order(-res.pca$ind$cos2[, 1]), 1:2])
+```
+
+```{r}
+head(res.pca$ind$cos2[order(-res.pca$ind$cos2[, 2]), 1:2])
+```
+
+**Contribution of individuals:**
+
+-   Analyzing the top records based on Dim.1 contributions, it is notable that individuals with IDs 40051, 39715, and 7951 have the highest contributions to the variability along Dim.1. In particular, individual 44400 stands out with a substantial contribution of approximately 22.5%, emphasizing its significant role in explaining the variance along Dim.1. Similarly, reviewing the top records based on Dim.2, exhibit the highest contributions, suggesting their prominent influence on the variability captured by Dim.2.
+
+```{r}
+head(res.pca$ind$contrib[order(-res.pca$ind$contrib[, 1]), 1:2])
+```
+
+```{r}
+head(res.pca$ind$contrib[order(-res.pca$ind$contrib[, 2]), 1:2])
+
+```
+
+**Analyzing 6 individuals that have a significant contribution to the first component:**
+
+-   This results matches the outcome of the variable analysis we did previously, where we concluded that mileage and year are the variables that contributed more in the first component.
+
+-   Its observed that cars that mostly contributed to the first component are diesel cars, have a really high mileage and and their year is very far so they are very old.
+
+```{r}
+df[which(row.names(df) %in% c(40051 , 7951 , 39715, 9607, 39752, 9633 )), ]
+```
+
+# 6. Correspondence Analysis
+
+-   Correspondence Analysis is a statistical technique for exploring relationships between categorical variables.
+
+-   In our pervious deliverablle, we have already created a factor variable `f.price` with 7 levels.
+
+-   In our case study we will try to find the relationship between `f.price` and two categorical factor variables `f.year`and `f.miles`
+
+## 6.1 F.Price vs F.Year
+
+```{r}
+x<-table(df[,c("f.price", "f.year")])
+res.ca<-CA(x)
+```
+
+-   We apply Chi Square's test and check the p-value, as we can see, it is very small and very close to zero, so we have evidence to reject the null hypothesis, and prove the existence of a strong relationship between two factor variables.
+
+```{r warning=FALSE}
+chisq.test(x)
+
+```
+
+-   As we can see, the first components has 73,1% of variability, we could consider this ax enough to explain data. This also explain how these are related.
+
+```{r}
+fviz_eig(res.ca, addlabels = TRUE)
+```
+
+-   As the graph below shows us, the close relationship that `f.price` catgeories and `f.year` categories have.
+
+-   As time elapses since a car's initial release, it tends to be perceived as more affordable, while conversely, newly released models often carry a higher price tag.
+
+```{r}
+plot( res.ca, cex=0.8, graph.type = "classic" )
+lines( res.ca$row$coord[,1], res.ca$row$coord[,2], col="blue", lwd = 2 )
+lines( res.ca$col$coord[,1], res.ca$col$coord[,2], col="red", lwd = 2 )
+fviz_ca_biplot(res.ca,repel=TRUE)+theme_bw()
+
+```
+
+## 6.2 F.Price vs F.Miles
+
+-   Now we will try to do the same seteps but with `f.miles`:
+
+```{r}
+x<-table(df[,c("f.price", "f.miles")])
+res.ca<-CA(x)
+```
+
+-   We apply Chi Square's test and check the p-value, as we can see, it is very small and very close to zero, so we have evidence to reject the null hypothesis, and prove the existence of a strong relationship between two factor variables.
+
+```{r}
+chisq.test(x)
+```
+
+-   As we can see, the first components has 87,6% of variability, we could consider this ax enough to explain data. This also explain how these are related.
+
+```{r}
+fviz_eig(res.ca, addlabels = TRUE)
+```
+
+-   As the graph below shows us, the close relationship that `f.price` categories and `f.miles` categories have.
+
+```{r}
+plot( res.ca, cex=0.8, graph.type = "classic" )
+lines( res.ca$row$coord[,1], res.ca$row$coord[,2], col="blue", lwd = 2 )
+lines( res.ca$col$coord[,1], res.ca$col$coord[,2], col="red", lwd = 2 )
+fviz_ca_biplot(res.ca,repel=TRUE)+theme_bw()
+```
+
+## 6.3 Conclusion
+
+-   Can these categories that can be combined/avoided to explain transformed price target into f.price ? Yes, they are related, as we saw both are very related to f.price and combined to explain target variable.
+
+# 7 Multiple Correspondence Analysis
+
+## 7.1 MCA & Eigenvalues & dominant axes analysis
+
+-   We'll utilize a dataframe free of previously identified multivariate outliers to avoid anomalies. The variable "price" will serve as a supplementary quantitative variable, while "f.price" and the binary target "Audi" will function as supplementary qualitative variables. We will also discard f.year and f.miles as they are very related to f.price as we spotted previously.
+
+```{r}
+library(FactoMineR)
+library(factoextra)
+x<-df[,c(3,4,6,10, 12, 14:17)] 
+res.mca<-MCA(x[-ll,], quanti.sup = c(1), quali.sup = c(5,9)) 
+```
+
+-   Based on Kaiser Criteria, 7 components should be retained.
+
+```{r}
+length(which(res.mca$eig[,1] > mean(res.mca$eig[,1])))
+```
+
+-   In 7 components, it is accumulated 63.11% of variance.
+
+```{r}
+res.mca$eig[1:7,]
+
+```
+
+```{r}
+fviz_eig(res.mca)
+```
+
+## 7.2 Individuals Point of View
+
+-   **Are there any individuals "too contributive"?**
+
+-   As we can see, There are some individuals that contribute more in the first component, and others that that do the same in the second component. We can also state the existence of many individuals that contribute equally in both components.
+
+```{r}
+head(res.mca$var$contrib)
+fviz_mca_ind(res.mca, geom=c("point"),col.ind="contrib", gradient.cols =
+c("yellow", "red"))
+
+
+```
+
+-   **Are there any groups?**
+
+-   From the the previous graph, we can spot there a few individuals that can form a group as they are scattered equally without any specific pattern.
+
+-   but as we can see in the following output table, categories do not tend to contribute equally or contribute very low in different dimensions.
+
+```{r}
+head(res.mca$var$cos2)
+```
+
+```{r}
+fviz_cos2(res.mca, choice = "var", axes = 1:2)+theme_bw()
+
+```
+
+-   We can see through the graph that no individual groups are spotted base on each variable, the only one that can show a better grouping is if we depend on transmission types, we can split individuals into two groups Manual and Automatic/Semi-Automatic.
+
+-   Please check Annex, to check the other grouping graphs of individuals:
+
+```{r}
+grp<- df[-ll,]$transmission
+fviz_mca_ind(res.mca, label="none", habillage = grp, addEllipses = TRUE)
+
+```
+
+## 7.3 Interpreting map of categories:
+
+-   Map of variables: **`transmission`**, **`manufacturer`** and **`f.engineSize`** are better represented in Dim1 , meanwhile **`f.tax`** and **`f.mpg`** are better represented in Dim2.
+
+-   **`f.fueltype`** is represented equally and insignificantly compared to other variables.
+
+    ```{r}
+    fviz_mca_var(res.mca, choice="mca.cor", repel=TRUE)
+    ```
+
+-   **`f.tax_Mediumf.mpg_Very High`** categories are better represented in Dim2 is represented
+
+-   We can see that **`Cheap/Very Chea`** **`Manual`** Transmission and **`Small`** EngineSize are close to each other and contribute negatively at same way in Dim1.
+
+-   **`Mercedes`**, **`Automatic`** transmission, **`Hybrid`** and **`Large Engine Size`**, **`very Expensive`** are also gathered in the same area of the Map which makes sense, and contribute positvely in Dim1.
+
+```{r}
+fviz_mca_var(res.mca, repel=TRUE)
+```
+
+## 7.4 Interpreting the axes associations to factor map
+
+-   The following result gives us an insight regarding the variables and categories that are related to the two retained axes:
+
+-   Dim1:
+
+    -   Variables: **`f.engineSize`** with R-Squared value of 0.71 and **`transmission type`** (0.48)
+
+    -   Categories: **`f.engineSize= f.engineSize_Large`** and **`transmission=f.Trans-Manual`**
+
+```{r}
+res.desc <- dimdesc(res.mca, axes = c(1,2))
+#res.desc[[1]]
+
+```
+
+-   Dim2:
+
+    -   Variables: **`f.mpg`** with a R-Squared value of 0.73 and **`tax`** (0.33).
+
+    -   Categories: **`f.mpg=f.mpg_Very High`** and **`f.tax=f.tax_Medium`**
+
+```{r}
+#res.desc[[2]] 
+```
+
+# 8 K-Means Classification:
+
+## 8.1 Optimal Number of Clusters:
+
+-   At this point, after applying the PCA, and retaining the the first and second axes based on Kaiser Criteria we will process with clustering our data by using K-Means:
+
+```{r}
+res.pca<-FactoMineR::PCA(df, quali.sup=c(1,4,6,10:17), quanti.sup= c(3),  ind.sup = ll, graph = FALSE)
+ppcc<-res.pca$ind$coord[,1:2] # 2 components principals (based on kaiser criteria)
+dim(ppcc)
+
+```
+
+-   Using the elbow method we can expect that the optimal number of cluster is 5, as the graph shows that the total of within sum of square starts to slow down.
+
+```{r}
+#Optimal number of clusters
+library("factoextra")
+fviz_nbclust(ppcc, kmeans, method = "wss")
+```
+
+```{r}
+dist<-dist(ppcc) # coordenates are real - Euclidean metric
+kc<-kmeans(dist,5,iter.max=30,trace=TRUE) 
+```
+
+-   As we set the number of clusters at 5, we can display the number of observations in each cluster as follows:
+
+```{r}
+barplot(table(factor(kc$cluster)),main= " Number of observations per cluster")
+```
+
+## 8.2 Clustering Quality:
+
+-   The next chunk shows the quality of clustering. 77.65% is a higher percentage that suggests good and meaningful separation of clusters, indicating that the clustering is explaining a significant portion of the variance in the data.
+
+    ```{r}
+    100*(kc$betweenss/kc$totss)
+    ```
+
+## 8.3 Clusters Description:
+
+-   We will proceed with describing and analyzing each cluster.
+
+-   We will assign to each individual in our original datafram with its own K-Means Cluster number. We are not considering Any Multivariant Outliers to avoid anomalies.
+
+```{r}
+save_df<-df
+df<-df[-ll,]
+df$claKM<-kc$cluster
+df$claKM<-factor(df$claKM)
+
+res.cat <-catdes(df,18) #18 is claKM  variables, representing each individuals corresponding cluster.
+```
+
+### 8.3.1 Description of clusters in relation with catgorical variables:
+
+-   As we can see below (Please check [7. Annex:], as the output was very long), we find some categorical variables and factor very related to the cluster variable that we recently created. The low p-values show evidence how some variables have been significant to cluster our data.
+
+-   **Cluster 1** is predominantly composed of non-Audi vehicles, with 78.78% falling into this category. The majority of vehicles in this cluster, 68.09%, are associated with a low taxation bracket. A significant portion, 50.52%, feature a medium-sized engine, and more than half of the vehicles, 56.48%, use diesel as fuel. The profile of this cluster is distinct, highlighting mostly newer cars from the years 2019 and 2020, which align with the low tax and medium engine size characteristics. Specific models like VW T-Cross and VW T-Roc are perfectly aligned with this cluster, while older, less efficient, and lower-priced vehicles, including certain models like BMW X6 and BMW M3, are conspicuously absent.
+
+-   **Cluster 2** is characterized by vehicles that are generally less fuel-efficient with 83.71% labeled as Low-MPG, and predominantly more costly, with 80.34% labeled as Expensive. The larger engine size in 73.27% of the cars conforms to the expectation that larger engines and lower MPG ratings are associated with higher costs. Notable in this cluster are vehicles such as the VW Touareg, Audi Q7, and BMW M4, which are indicative of the cluster's trend towards new or nearly new conditions, with high tax rates and a preference for petrol, although a significant presence of diesel and hybrid vehicles is also evident.
+
+-   **Cluster 3** shows a preference for low-tax vehicles (70%), with a nearly equal split between medium (50.52%) and small (27.92%) engine sizes. Diesel is the fuel type for 56.48% of the vehicles, while petrol accounts for 41.89%. This cluster includes a large proportion of used, old, or very old vehicles, aligning with the previously stated categories, indicating a trend towards older, less expensive, and more fuel-efficient models.
+
+-   **Cluster 4** differentiates itself with a very high association with very old vehicles (f.miles=Very Old) and low-priced options (f.price=Low-priced), both strongly associated with the cluster. Specific manufacturers like Mercedes and BMW, along with models such as VW Passat and BMW 1 Series, have significant contributions to this cluster.
+
+-   **Cluster 5** is marked by a high proportion of vehicles with high tax rates (f.tax=High) and a tendency towards very old models (f.miles=Very Old). Large engine sizes (f.engineSize=Large) and low fuel efficiency (f.mpg=Low) are also characteristic features of this cluster. Vehicles like the Mercedes M Class and Audi Q5 are prominent, and the presence of Audi vehicles is noted as a distinguishing factor. Overall, this cluster represents a collection of older, more expensive vehicles with larger engine sizes.
+
+### 8.3.2 Description of clusters in relation with numerical variables:
+
+-   **Cluster 1**: The average price of the cars in this cluster is 16,190.02, which is considerably lower than the overall mean price of 21,600. The tax rate for these cars is also lower, averaging 143.09 compared to the overall mean of 146.92. The engine size in this cluster is smaller, with an average of 1.71 liters, and the cars tend to be more fuel-efficient, with an average MPG of 59.97. However, the average mileage is higher at 50,319.57 miles. These findings are consistent with the categorical description of Cluster 1, which is primarily composed of economical cars with lower tax rates and smaller engines.
+
+    **Cluster 2**: This cluster features cars with an average engine size of 1.84 liters and prices that are below average at 11,786. The tax rate is slightly lower than the overall mean, standing at 144.03. These cars have a higher average mileage of 24,708.01 miles and better fuel efficiency, with an average MPG of 59.65. This cluster is characterized by more affordable, fuel-efficient cars with moderate usage.
+
+    **Cluster 3**: Cars in Cluster 3 have lower fuel efficiency, with an average MPG of 38.16, and high mileage, averaging around 52,520 miles. The tax rate here is above the average at 180.35, and the engine size is larger, with an average of 2.59 liters. The average price of cars in this cluster is 36,517.82, which is significantly above the overall mean. This cluster is defined by less fuel-efficient, high-mileage vehicles that are priced higher than average.
+
+    **Cluster 4**: This cluster consists of cars with very low average mileage of 6,703.03 miles, indicating that they are newer or less frequently used. The average MPG is lower at 48.28, and the engine size is slightly below the overall average at 1.73 liters. The tax rate is quite high at 182.93, and the average price is 19,244.21, which is a bit above the overall mean price. Cars in Cluster 4 are generally newer, with moderate fuel efficiency and slightly higher pricing.
+
+    **Cluster 5**: Cars in Cluster 5 have an average tax rate of 145.56 and very low mileage, with an average of 11,669.23 miles. The engine sizes are large at an average of 2.71 liters, contributing to lower fuel efficiency, with an average MPG of 37.56. The average price is 24,700.78, substantially higher than the overall mean. This cluster features newer, high-end cars with large engines and lower MPG.
+
+# 9 Hierarchical Clustering:
+
+## 9.1 Number of Clusters :
+
+-   As we observe below, using HCPC, has implicitly detected the optimal number of clusters through the inertia gain barplot, in this case we have three clusters. The quality of this partition is around 41.55%, so we will try to increase it.
+
+```{r warning=FALSE}
+res.hcpc <- HCPC(res.pca,nb.clust = -1, order = TRUE)
+((res.hcpc$call$t$within[1]-res.hcpc$call$t$within[3])/
+res.hcpc$call$t$within[1])*100
+```
+
+## 9.2 Clustering Quality:
+
+We will try now with 5 clusters:
+
+-   As we can see the quality of partition has now increased to 58.60%, in case if we want to achieve a quality of 80%, we need 16 clusters at least. In our study, we will keep data in 5 cluster to facilitate the process of study, comparison and analysis.
+
+```{r}
+res.hcpc <- HCPC(res.pca, nb.clust = 5, order = TRUE)
+((res.hcpc$call$t$within[1]-res.hcpc$call$t$within[5])/
+res.hcpc$call$t$within[1])*100
+```
+
+-   We can visualize hos many individuals has each cluster:
+
+    ```{r}
+    table(res.hcpc$data.clust$clust)
+    barplot(table(res.hcpc$data.clust$clust), main = "Number of individuals per cluster")
+    ```
+
+## 9.3 Clusters Description:
+
+-   We will assign to each individual of our dataframe the number of its cluster.
+
+    ```{r include=FALSE}
+    df$claH<-0
+    df$claH<-res.hcpc$data.clust$clust
+    df$claH<-factor(df$claH)
+
+
+    ```
+
+### 9.3.1 **Description of clusters in relation with categorical variables:**
+
+-   Description of each cluster in relation with other categorical/factor variables, please check [7. Annex:] for the following output.
+
+    ```{r include=FALSE}
+    #res.hcpc$desc.var$category check annex
+    ```
+
+-   **Cluster 1** : Focused on cars from 2019, this cluster shows a preference for new or nearly new vehicles. Key features include low mileage, moderate fuel efficiency, and a tendency towards expensive cars. Volkswagen models, especially VW-T-Roc and VW-T-Cross, are dominant, with semi-automatic transmission and medium engine size being common. These cars usually have low tax rates and run on petrol.
+
+-   **Cluster 2**: This cluster is characterized by cars with large engine sizes, notably the BMW M4 and Mercedes GLS Class. These vehicles score high on luxury and performance, with features like expensive pricing, low fuel efficiency, and semi-automatic transmissions. Diesel fuel types and manual transmissions are also significant, with BMW and Mercedes being the primary manufacturers for the year 2019.
+
+-   **Cluster 3**: Dominated by older vehicles with high mileage, this cluster highlights cars with very high fuel efficiency from the years 2017 and 2016. Affordable and low-priced options are preferred, catering to a budget-conscious consumer base. Manual transmissions and small engine sizes are common, with the VW Polo being a popular model.
+
+-   **Cluster 4**: This segment is marked by high tax rates, indicating a preference for luxury or high-performance vehicles. Cars in this cluster typically have moderate fuel efficiency, very old age, and large engine sizes. The Audi Q5 and BMW X5 are prominent models, with the year 2015 being notable. These cars generally have low fuel efficiency and high prices.
+
+-   **Cluster 5**: Characterized by very old, low-priced cars from model years 2013-2015, this cluster includes vehicles with high tax rates and a preference for diesel fuel. These cars exhibit very high fuel efficiency and often feature manual transmissions. Key models include the Audi A6, BMW 5 Series, and Mercedes SLK, showing a diverse range of manufacturers.
+
+### 9.3.2 **Description of clusters in relation with numerical variables:**
+
+-   Now we will proceed to describe the relationship between numerical variables and these hierarchical clusters:
+
+    ```{r}
+    # res.hcpc$desc.var$quanti Please check annex. 
+    ```
+
+-   **Cluster 1**: This cluster includes relatively recent vehicle models (average manufacturing year 2018.95) with higher prices (average 25,163.36) and smaller engine sizes (average 1.74 L). These vehicles have lower taxes (average 145.81) but also lower fuel efficiency (average 46.37 MPG) and lower mileage (average 6,739.79 miles). This suggests a preference for newer, more expensive cars with smaller engines, balancing tax savings against fuel efficiency.
+
+-   **Cluster 2**: Vehicles in this cluster are characterized by larger engine sizes (average 2.99 L) and higher prices (average 36,663.06). They are slightly newer models (average manufacturing year 2017.88) with slightly higher taxes (average 148.65). Despite their lower mileage (average 15,498.64 miles) and lower fuel efficiency (average 40.10 MPG), these vehicles appeal to consumers looking for powerful, more luxurious cars with modern features.
+
+-   **Cluster 3**: This cluster is marked by vehicles with high fuel efficiency (average 61.10 MPG) and higher mileage (average 22,865.53 miles). The cars are older (average manufacturing year 2016.85) with smaller engine sizes (average 1.69 L) and lower prices (average 16,598.22). The lower taxes (average 143.51) indicate these vehicles are economical and likely appeal to environmentally conscious consumers.
+
+-   **Cluster 4**: Vehicles in this cluster have higher taxes (average 199.92), higher mileage (average 37,045.15 miles), and larger engine sizes (average 2.37 L). Their fuel efficiency is slightly below the overall mean (average 44.58 MPG), and they are slightly older models (average manufacturing year 2015.53). This cluster likely attracts buyers who prioritize power and durability in their vehicles.
+
+-   **Cluster 5**: This cluster includes vehicles with the highest mileage (average 52,765.78 miles), moderately high fuel efficiency (average 60.09 MPG), and slightly smaller engine sizes (average 1.96 L). The lower prices (average 12,880.25) and older manufacturing years (average 2014.81) suggest these cars cater to budget-conscious consumers who value efficiency and affordability in a used vehicle.
+
+# 10 Hierarchical Clustering from MCA
+
+## 10.1 Hierarchical Clustering
+
+-   We will make 5 clusters to facilitate the process of further comparision and analysis:
+
+```{r}
+res.hcpcMCA <- HCPC(res.mca,nb.clust = 5, order = TRUE)
+```
+
+## 10.2 Clustering Quality
+
+-   This clustering has a total gain of inertia of 48.39%, in case if we wanted to achieve at least 80% we will be needing 22 clusters, which makes the study more complicated.
+
+    ```{r}
+    ((res.hcpcMCA$call$t$within[1]-res.hcpcMCA$call$t$within[5])/
+    res.hcpcMCA$call$t$within[1])*100
+    ```
+
+    ```{r}
+    ((res.hcpcMCA$call$t$within[1]-res.hcpcMCA$call$t$within[22])/
+    res.hcpcMCA$call$t$within[1])*100
+    ```
+
+## 10.3 Clustering Description:
+
+-   We can see the following barplot describing the individuals distribution through different clusters
+
+```{r}
+table(res.hcpcMCA$data.clust$clust)
+barplot(table(res.hcpcMCA$data.clust$clust), main= "observations/cluster")
+```
+
+-   The extremely low p-values (approaching zero) suggest a significant association between the categories of the variables, indicating that these variables contribute significantly to the formation of clusters.
+
+```{r}
+
+res.hcpcMCA$desc.var$test.chi2 
+```
+
+**Describing each cluster in relation with different categories:**
+
+```{r include=FALSE}
+res.hcpcMCA$desc.var$category 
+```
+
+-   **Cluster 1** primarily consists of cars with small engine sizes, with 80.31% falling into this category. Petrol is the major fuel type, making up 54% of this cluster, and manual transmission is common, found in 47.52% of the cars. Volkswagen is a notable manufacturer, representing 47.47% of this cluster. Cars in Cluster 1 are characterized by high MPG, with 41.08% having high fuel efficiency. The pricing is varied, but a significant portion (47.43%) is classified as very cheap, and there is a strong association (25.9%) with low tax levels.
+
+-   **Cluster 2** is dominated by medium-sized engine cars, constituting 60.6% of the cluster. Diesel is the predominant fuel type, present in 49.1% of the cars, and BMW is the leading manufacturer with 56.41% association. The MPG distribution is balanced, featuring both moderate (50.2%) and very high (42.27%) MPG categories. Hybrid fuel type and manual transmission are also significant in this cluster, representing 81.25% and 37.54% respectively. This cluster has a considerable number of cars with high tax (38.76%).
+
+-   **Cluster 3** has a strong link (69.23%) with medium tax levels. Very high MPG is a key feature, representing 18.97% of the vehicles. Diesel is the predominant fuel type, accounting for 8.43% of the cars. The pricing landscape is varied with significant numbers of cars classified as very affordable (13.01%), cheap (11.73%), and very cheap (6.57%). Manual transmission is notable, present in 7.42% of the cars. Medium-size engines are also a characteristic of this cluster (6.51%).
+
+-   **Cluster 4** is marked by a high percentage (79.69%) of cars with low MPG. A significant portion of the cars are very expensive (62.80%), and there is a strong association with large engine sizes (48.06%) and petrol fuel (36.59%). High tax levels (40.88%) and automatic transmissions (36.30%) are also notable features. Audi is a prominent manufacturer in this cluster.
+
+-   **Cluster 5** is distinguished by a strong association with Mercedes as the manufacturer (60.37%). Diesel is the prevalent fuel type, found in 29.88% of the cars in this cluster. Large engine sizes are notable, accounting for 41.90%. There is a medium association with low taxes (22.33%) and a significant presence of very high MPG cars (30.25%). Both automatic and semi-automatic transmissions are significant, representing 26.02% and 25.88% respectively. The pricing spectrum is diverse, with notable presences in various price ranges.When
+
+    it comes to numerical target variable price it a low effect in this clustering creation compared but as p-vale is 0 we can say that this variable has somehow an effect on the this clustering. Note that, we passed this variable as supplementary during MCA.
+
+```{r}
+res.hcpcMCA$desc.var$quanti.var
+```
+
+-   We can aslo see how **`price`** behaves in each cluster:
+
+```{r}
+res.hcpcMCA$desc.var$quanti
+```
+
+1.  **Cluster 1** is characterized by a significant negative v-test value of -23.51, indicating a notable deviation from the overall dataset's mean price. The average price in this cluster stands at 15,447.81, considerably lower than the overall mean, with a standard deviation of 5,560.03. The pronounced difference in pricing, leaning towards the cheaper end, is statistically significant with a p-value of 3.47e-122.
+
+2.  **Cluster 2** also presents a significant negative v-test value of -21.91. This suggests that the mean price in this cluster, which is 13,874.35, is significantly lower than the overall mean. The standard deviation here is 3,938.32, pointing to a narrower price range. The low p-value of 2.06e-106 emphasizes the significance of this observed price difference, categorizing this cluster as having cheap and affordable prices.
+
+3.  **Cluster 3** shows a relatively small positive v-test value of 2.40, indicating a slight increase in the mean price compared to the overall dataset. The mean price in this cluster is 21,934.10, slightly higher than the overall mean, with a standard deviation of 6,886.67. The statistical significance of this difference is supported by a p-value of 0.0165.
+
+4.  **Cluster 4** exhibits a substantial positive v-test value of 35.64, highlighting a significant difference in mean prices. The average price in this cluster is a high 30,965.45, with a large standard deviation of 10,400.53. This significant deviation from the overall mean price is underscored by a very low p-value of 3.68e-278, categorizing this cluster as having expensive to very expensive pricing.
+
+5.  **Cluster 5** demonstrates a positive v-test value of 5.50, indicating a notable difference in mean prices. The average price in this cluster is 22,947.50, higher than the overall mean, with a standard deviation of 8,436.30. The significance of this price difference is confirmed by a p-value of 3.75e-08, suggesting that this cluster has moderately affordable pricing.
+
+## 10.4 Paragons & Class-Specific individuals:
+
+We can spot the most contributing individuals and extreme ones as following:
+
+```{r}
+res.hcpcMCA$desc.ind$para 
+```
+
+```{r}
+res.hcpcMCA$desc.ind$dist 
+```
+
+```{r}
+para1<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$para[[1]]))
+dist1<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$dist[[1]]))
+para2<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$para[[2]]))
+dist2<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$dist[[2]]))
+para3<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$para[[3]]))
+dist3<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$dist[[3]]))
+para4<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$para[[4]]))
+dist4<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$dist[[4]]))
+para5<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$para[[5]]))
+dist5<-which(rownames(res.mca$ind$coord)%in%names(res.hcpcMCA$desc.ind$dist[[5]]))
+plot(res.mca$ind$coord[,1],res.mca$ind$coord[,2],col="grey50",cex=0.5,pch=16)
+points(res.mca$ind$coord[para1,1],res.mca$ind$coord[para1,2],col="pink",cex=1,pch=16)
+points(res.mca$ind$coord[dist1,1],res.mca$ind$coord[dist1,2],col="turquoise",cex=1,pch=16)
+points(res.mca$ind$coord[para2,1],res.mca$ind$coord[para2,2],col="darkviolet",cex=1,pch=16)
+points(res.mca$ind$coord[dist2,1],res.mca$ind$coord[dist2,2],col="darkred",cex=1,pch=16)
+points(res.mca$ind$coord[para3,1],res.mca$ind$coord[para3,2],col="yellow",cex=1,pch=16)
+points(res.mca$ind$coord[dist3,1],res.mca$ind$coord[dist3,2],col="gold",cex=1,pch=16)
+points(res.mca$ind$coord[para4,1],res.mca$ind$coord[para4,2],col="orange",cex=1,pch=16)
+points(res.mca$ind$coord[dist4,1],res.mca$ind$coord[dist4,2],col="lightblue",cex=1,pch=16
+)
+points(res.mca$ind$coord[para5,1],res.mca$ind$coord[para5,2],col="lightgreen",cex=1,pch=16)
+points(res.mca$ind$coord[dist5,1],res.mca$ind$coord[dist5,2],col="violet",cex=1,pch=16)
+```
+
+-   As we can see there are paragons that contribute more in the first component more than the other component, and viceversa.
+
+-   And other paragons that do not play a significant role in the first component netiher the second.
+
+## 10.5 Comparison of clusters obtained after K-Means (based on PCA) and/or Hierarchical Clustering (based on PCA) focusing on targets
+
+### 10.5.1 General Comparision
+
+-   The accuracy of approximately 21.84% suggests a moderate level of alignment. This indicates that the clusters generated by the hierarchical clustering algorithm capture some of the underlying patterns present in the HC-MCA classes, but there is room for improvement.
+
+-   The low accuracy of approximately 16.16% indicates a poor alignment between the K-Means clustering and these HC-MCA clusters. This raises questions about the effectiveness of the K-Means clustering algorithm in capturing the patterns.
+
+-   If we had a greater concordance, this would mean that they would be more similar.
+
+```{r}
+df$hcpckMCA<-res.hcpcMCA$data.clust$clust
+# With Hierarchical Clustering (PCA)
+t1<-table(df$claH,df$hcpckMCA)
+t2<-table(df$claKM,df$hcpckMCA)
+t1
+t2
+```
+
+```{r}
+100*sum(diag(t1)/sum(t1))
+100*sum(diag(t2)/sum(t2))
+```
+
+### 10.5.2 Comparison based on quantitative target: Price
+
+-   The results unveil distinctive patterns in the relationship between the "price" variable and the clustering variable across three clustering methods. Hierarchical Clustering based on PCA exhibits the most substantial association, influencing price variation by 53%. In K-Means Clustering, the "price" variable shows a noteworthy 56% impact, indicating a robust relationship. On the other hand, MCA Hierarchical Clustering reveals a comparatively modest influence, with an Eta2 value of 0.39. These numerical insights shed light on the varying degrees of impact that different clustering methodologies exert on the variable of interest, providing a quantitative understanding of their implications.
+
+```{r include=FALSE}
+res.hcpc$desc.var$quanti.var
+#price      0.5285030       0
+```
+
+```{r warning=TRUE, include=FALSE}
+res.cat <-catdes(df,18)  # 18 is claKM,variable indicating the cluster group on K-Means
+res.cat
+#price      0.5609046       0
+```
+
+```{r include=FALSE}
+res.hcpcMCA$desc.var$quanti.var
+#price 0.3903306       0
+```
+
+### 10.5.3 Comparison based on binary target: Audi
+
+-   The variable "Audi" consistently shows significant associations within different cluster methods, and it plays a meaningful role in distinguishing clusters and sometimes note.
+
+-   The Audi variable exhibits a noteworthy association exclusively in one only cluster during Hierarchical Clustering based on PCA, evident from its considerably higher p-value in comparison to other categorical variables. This elevated p-value implies a diminished linkage and contribution to the formation of these clusters using this method. In contrast, during K-Means clustering, despite a higher p-value of 8.045414e-03, Audi's impact is relatively modest, particularly in clusters 3 and 4. Surprisingly, this contribution is more substantial than the prior method, despite the lower p-value. Notably, MCA Hierarchical Clustering stands out with the lowest p-value of 1.429662e-67, underscoring the pivotal role played by Audi categories (Yes and No) in shaping clusters 2, 4, and 5, thereby contributing significantly to the underlying structure.
+
+```{r include=FALSE}
+res.hcpc$desc.var
+# Audi          3.082361e-02   4
+
+# $4
+#Audi=Audi No  2.4080445  69.4656489 78.8441477 1.063894e-02  -2.554340
+#Audi=Audi Yes 3.9447732  30.5343511 21.1558523 1.063894e-02   2.554340
+```
+
+```{r include=FALSE}
+res.cat <-catdes(df,18) # 18 is claKM,variable indicating the cluster group on K-Means
+res.cat
+
+
+#Audi          8.045414e-03   4
+
+#$3
+#Audi=Audi Yes   6.8400771 27.2030651 21.21397915  1.783851e-02   2.368953
+#Audi=Audi No    4.9286641 72.7969349 78.78602085  1.783851e-02  -2.368953
+
+#$4
+#Audi=Audi Yes   32.17726397 19.18437679 21.21397915  9.552902e-03  -2.591606
+#Audi=Audi No    36.49805447 80.81562321 78.78602085  9.552902e-03   2.591606
+
+
+```
+
+```{r include=FALSE}
+res.hcpcMCA$desc.var
+
+
+#Audi          1.429662e-67  4
+
+#$2
+#Audi=Audi Yes  36.223507 23.3830846 21.2139792  9.825840e-03   2.58189
+#Audi=Audi No   31.958495 76.6169154 78.7860208  9.825840e-03  -2.581899
+
+
+#$4
+#Audi=Audi Yes  35.6454721 33.8208410 21.2139792  8.902573e-29  11.130608
+#Audi=Audi No   18.7808042 66.1791590 78.7860208  8.902573e-29 -11.130608
+
+#$5
+#Audi=Audi Yes 0.6743738  0.8363202 21.213979  1.611039e-83 -19.362124
+#Audi=Audi No  21.5304799 99.1636798 78.786021  1.611039e-83  19.362124
+```
+
+**Conclusion:**
+
+-   In conclusion, the optimal clustering method is contingent on our research objectives, emphasizing the nuanced nature of this decision. Rather than asserting superiority of one method over another, the selection should align with the desired data interpretation, research goals, and study conditions. A judicious choice rooted in a comprehensive understanding of these factors ensures a rigorous application of clustering techniques, fostering a more insightful and robust data analysis.
+
+# *11. Prediction model for numeric target "Price":*
+
+## *11.1 Initial model: price \~ engineSize + mpg*
+
+-   *When examining the interplay between price and other variables via Principal Components Analysis, a notable observation surfaces: the most pronounced (negative) correlation is evident between year and mpg (as illustrated in the following graph). Therefore, the most intuitive variable that come to mind for inclusion in our first initial model is mpg.*
+-   *It's worth highlighting a robust correlation between Price and the other variables in our dataset. For instance, the correlation coefficients reveal noteworthy associations: 0.58 with Engine Size, 0.60 with Year, -0.54 with Mileage, and -0.62 with MPG. These correlations, coupled with p-values approaching zero, underscore the substantial impact of these variables on our target variable, Price. These insights affirm the significance of Engine Size, Year, Mileage, and MPG as influential factors shaping the main dynamics in our model. The 'tax' variable holds minimal significance in this context, which is why it doesn't appear in the following output.*
+
+```{r}
+# Graph of the variables
+fviz_pca_var(res.pca)
+res.con <- condes(df,num.var=which(names(df)=="price"))
+res.con$quanti 
+```
+
+-   *Let's built the first model based on these conclusions:*
+-   Disclaimer: we won't include the multivariant outliers that we spotted during the first/second deliverable.
+
+```{r}
+m0<-lm(price~engineSize+mpg,data=df)
+summary(m0) 
+```
+
+-   *The model currently exhibits a moderate level of variability, as indicated by the R-squared value of 55.24%. While this suggests that approximately 55.62% of the variability in the dependent variable (price) is explained by the included independent variables (engineSize and mpg), there is room for improvement. Our aim is to enhance the model's explanatory power, ultimately surpassing an ambitious target of 80% R-squared. Achieving this goal would signify a more robust and accurate representation of the factors influencing the price, thereby enhancing the model's predictive capabilities.*
+
+## *11.2 Adding more covariates: price \~ mileage + year + engineSize + mpg*
+
+-   *To enhance the model further, we will incorporate mileage and year, identified as correlated variables with price through Principal Component Analysis (PCA) deductions.*
+
+```{r}
+m1<-lm(price~mileage+year+engineSize+mpg,data=df)
+summary(m1) 
+```
+
+*The new model, denoted as `m1`, represents a significant improvement over the initial model (`m0`). Here are the key findings from the summary of m1:*
+
+-   *The residuals exhibit a narrower range compared to m0.*
+
+-   *The residual standard error has decreased indicating a reduction in the variability of the residuals compared to m0.*
+
+-   *The R-squared value has significantly increased to 78.04%, and the adjusted R-squared is also high (78.02%). This implies that the new model explains approximately 78.04% of the variability in the dependent variable.*
+
+*`m1` demonstrates substantial improvement over `m0`, with a higher R-squared, lower residual standard error, and significant coefficients. This model appears to be a more powerful predictor of price, explaining a substantial portion of the variability.*
+
+```{r}
+vif(m1)
+
+```
+
+-   *The provided values, all falling below 5, suggest that the correlation impact in this regression is relatively modest and not particularly influential. These findings suggest that while some correlation exists among certain predictors, the multicollinearity in the model is generally well-controlled, with VIF values falling within acceptable ranges.*
+
+```{r}
+par(mfrow=c(2,2));
+plot(m1,id.n=0)
+
+```
+
+-   *Even though we achieved a high Multiple R-squared value in this model (78.33% of the variability explained), the residual plots still reveal some imperfections that we need to address and improve upon.*
+-   *As we observe, none of the previous graphs show some heteroscedasticity as points are not equally scattered.*
+    -   *"Residuals vs Fitted" graph detects residuals that experience heteroscedasticity.*
+
+    -   *"Q-Q Residuals" graph shows us the normality of residuals, as the residuals tend to dodge the normal line this indicates non-normality of these residuals.*
+
+    -   *"Scale-Location" graph reassures the heteroscedasticity of residuals as how they are spread.*
+
+    -   *"Residuals vs Leverage Fitted" graph detects influential individuals with residuals that might strongly affect the regression model. Some outliers impact significantly impact the normal distribution.*
+
+```{r}
+AIC(m0,m1)
+```
+
+***Is our data normal?***
+
+-   *Assessing the normality of our target variable would help us improve these graphs or eve our Multiple R-squared value.*
+
+```{r}
+hist(df$price,freq=F,col="grey")
+mm<-mean(df$price);ss<-sd(df$price)
+curve(dnorm(x,mean=mm,sd=ss),col="red",lwd=2,lty=3, add=T)
+
+```
+
+-   *The Shapiro Test performs normality test on the variable "price". The result is an extremely low p-value (\< 2.2e-16). The small p-value indicates strong evidence against the null hypothesis, suggesting that the data does not follow a normal distribution.*
+
+```{r}
+shapiro.test(df$price)
+
+```
+
+*Other tests:*
+
+-   *The following Skewness test result shows a non-null value which indicates non-normality.*
+
+```{r}
+library(e1071)
+skewness(df$price)
+```
+
+-   *The following Kurtosis test result shows a non-null value which indicates non-normality.*
+
+```{r}
+kurtosis(df$price)
+```
+
+## *11.3 Box-Cox transformation of price:*
+
+-   *In an effort to enhance our linear regression model, we applied a Box-Cox transformation to the target variable. This transformation, guided by the optimal lambda from the `boxcox` function, seeks to address issues related to variance and normality. By optimizing the target variable's distribution, we aim to improve the overall performance and reliability of our regression analysis.*
+
+-   *Given the considerable deviation of the lambda interval from zero, we'll refrain from employing a direct logarithmic transformation and, instead, pursue the following strategy:*
+
+```{r}
+library(MASS)
+boxcox_results<-boxcox(m1,data=df)
+
+# Extract the optimal lambda
+optimal_lambda <- boxcox_results$x[which.max(boxcox_results$y)]
+
+# Target variable transformed
+df$price_transformed <- (df$price^ optimal_lambda - 1) / optimal_lambda
+```
+
+-   *Let's build a second model with `price_transformed`:*
+
+```{r}
+m2<-lm(price_transformed~mileage+year+engineSize+mpg,data=df)
+summary(m2)
+```
+
+-   *The R-squared went from 78% to 82%, it is a small but significant improvement when it comes to only make one only transformation. This indicates a better fit than the first model. This new model explain more variability in the relationship between the predictors and the target variable.*
+
+-   *To check, we calculate Variance Inflation Factors for this mode and we can see that the values are constant, no significant change in these values.*
+
+```{r}
+vif(m2)
+```
+
+-   *Let's analyse residual plots:*
+
+```{r}
+par(mfrow=c(2,2));
+plot(m2,id.n=0);
+
+```
+
+-   *As we can see, even though the Multiple R-squared: didn't increase a lot, we still could sense a lot of improvement through these graphs.*
+
+-   *The current plots illustrate a normal distribution of residuals, affirming the selection of this model as a preferred one. Notably, homoscedasticity is now more evident, and also indicating improved normality. However, it's worth noting that the residuals vs. leverage plot hasn't shown a better enhancement.*
+
+```{r}
+AIC(m1,m2)
+```
+
+## *11.4 Covariates transformations with BoxTidwell:*
+
+-   *Utilizing the `boxTidwell` function could provide valuable insights into potential transformations that may enhance our model performance across various lambda values.*
+
+-   *Note: The variables `year` and `mileage` exhibit a higher degree of correlation compared to other variables. Therefore, it is not feasible to incorporate both of them simultaneously during the computation of the boxTidwell function.*
+
+```{r echo=TRUE}
+library("carData")
+boxTidwell(price_transformed~mileage+engineSize+mpg,data=df)
+```
+
+-   As engineSize's lambda is close to zero than one, we will apply a logarithmic transformation.
+
+```{r}
+library("carData")
+m3<-lm(price_transformed~mileage+year+log(engineSize)+mpg,data=df)
+summary(m3) 
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(m3,id.n=0)
+
+```
+
+-   *While the Multiple R-squared values do not exhibit significant improvement compared to other models, the notable distinction lies in the graphical representation. The plots vividly reveal better homoscedasticity, pinpoint individuals with less leverage, and visible normality.*
+
+***Model Validation:***
+
+-   We will employ the Breusch-Pagan test to evaluate homoscedasticity. Since the p-value associated with the test is significantly low, we can reject the null hypothesis of heteroscedasticity. Consequently, this leads us to conclude that the model exhibits **homoscedasticity**, suggesting that the variance of the residuals is consistent across all levels of the explanatory variables.
+
+```{r}
+library(lmtest)
+bptest(m3)
+```
+
+-   *The VIF values are within a relatively moderate range, with mileage having a VIF of 2.9, year with 2.79, log-engineSize with 1.16, and mpg with 1.32. While the VIF for mileage and year is slightly above 2, suggesting some correlation, **none of the variables exhibit severe multicollinearity** (VIF above 5).*
+
+```{r}
+vif(m3)
+
+
+```
+
+-   *In the below residual plots for model m3 using Cook's distance, "mileage" and "year" exhibit non-significant test statistics, suggesting well-behaved residuals. However, "engineSize" and "mpg" display highly significant test statistics, indicating deviations from the model assumptions.*
+-   *The flat line in the scatter plot for mileage and year indicates a steady linear trend, meeting the assumption of consistent variability. But, when looking at engine size and mpg, the pattern is less clear, suggesting possible deviations from these assumptions in that case.*
+-   *The graphical representations affirm the **independence** of residuals within this model. The plots indicate that there is no discernible pattern or structure in the residuals.*
+
+```{r}
+residualPlots(m3,id=list(method=cooks.distance(m3),n=10))
+
+```
+
+-   Let's proceed to display the box plots of the R-student values, Hat values, and Cook's distances for the observations in the model.
+
+```{r}
+par(mfrow=c(1,3))
+Boxplot(abs(rstudent(m3)),id=list(labels=row.names(df)))
+Boxplot(abs(hatvalues(m3)),id=list(labels=row.names(df)))
+Boxplot(cooks.distance(m3),id=list(labels=row.names(df)))
+```
+
+```{r}
+stu <- which(abs(rstudent(m3))>3.0)
+cook <- which(abs(cooks.distance(m3))>0.01)
+hat <- which(abs(hatvalues(m3))>0.004)
+outs<-unique(stu,cook,hat)
+```
+
+-   Spotting influential individuals:
+
+```{r}
+x<-influencePlot( m3, id=c(list="noteworthy",n=5))
+obs<-rownames(x)
+outs<-unique(outs,obs)
+
+df_outs<-df[-outs,]
+```
+
+-   Building a model without unusual and influential data:
+
+```{r}
+m4<- update(m3, data=df_outs)
+summary(m4)
+```
+
+-   The model demonstrates a high degree of explanatory power, about 84% of the variance in the dependent variable. This robust model performance, along with the significant coefficients and the reasonable distribution of residuals, underscores the importance of removing outliers and influential points in data analysis.
+
+-   These diagnostic plots indicate that the model **`m4`** is performing well. The assumptions of linearity, homoscedasticity, and normality of the residuals appear to have been met, and there are no obvious influential outliers. This suggests that the model provides a good fit to the data.
+
+```{r}
+par(mfrow=c(2,2))
+plot(m4,id.n=0)
+```
+
+-   Let's review and compare models `m3` and `m4` to decide which model is better suited for our analysis and then choose the one to move forward with.
+
+```{r warning=FALSE}
+AIC(m3,m4)
+```
+
+-   Although model m4 has a lower AIC and might be the better model, we'll proceed with `m3`. This way, we keep the outliers in the mix, which will help us spot and address them as we refine our model.
+
+## *11.5 Incorporating Interaction Terms in the Linear Regression Model*
+
+### *11.5.1 Adding qualitative variables as predictors*
+
+-   *The following output highlights the categorical variables most correlated with the `price`. Notably, `model` emerges as the most influential categorical factor, followed by `transmission`. It's essential to note that some factors are derived from previously utilized covariates, so we won't take them into consideration.*
+
+```{r}
+condes(df,3)$quali
+```
+
+-   *Let's create a new model and analyze the results:*
+
+```{r}
+m5<-lm(price_transformed~mileage+year+engineSize+mpg + model + transmission,data=df)
+summary(m5) 
+```
+
+-   *Based on the adjusted R-squared and other statistical measures, it appears that adding the categorical variables 'model' and 'transmission' significantly improved the model's explanatory power and overall fit to the data. We achieved 91% of variability,*
+
+-   *Based on the following plots, the non-horizontal red line in the scale-location graph suggests some heteroscedasticity, challenging the assumption of constant variance. While the model retains excellent variability, the residuals' departure from normal distribution in extreme quantiles indicates potential limitations in capturing certain patterns. Additionally, there are influential extreme values with high leverage that could impact the regression and may require removal for model improvement.*
+
+```{r warning=FALSE}
+par(mfrow=c(2,2));
+plot(m5,id.n=0);
+```
+
+-   *For this model, mileage, year, engineSize, transmission and mpg show low VIF values (below 5), suggesting minimal multicollinearity. The "model" variable exhibits a relatively higher VIF of 5.40, possibly due to the categorical nature of car models.*
+
+```{r}
+vif(m5)
+```
+
+-   *The ANOVA table for model m5 shows highly significant p-values for all predictor variables, indicating their strong influence on the transformed price. The model is statistically significant overall, and the residuals have a low mean square value, suggesting a well-fitted model.*
+
+```{r}
+anova(m5)
+```
+
+### *11.5.2 Logarithmic transformation of "price":*
+
+*Can a target transformation make it better?*
+
+-   *Let's apply box-cox to check for possible transformations:*
+
+```{r}
+boxcox(price~mileage+year+engineSize+mpg +model + transmission,data=df)
+```
+
+-   *Given the proximity of lambda (λ) to zero, it suggests that applying a logarithmic transformation to the target variable would enhance its relationship with the predictor variables.*
+
+```{r}
+m6<-lm(log(price)~mileage+year+engineSize+mpg +model + transmission,data=df)
+summary(m6) 
+```
+
+-   *Improved normality in the regression is evident after the transformation, yet lower quantiles still exhibit a departure from a normal distribution. The residuals demonstrate a linear distribution, but the presence of influential data points affecting the regression is notable. A thorough analysis, including the removal of influential data, is recommended to refine model performance.*
+
+```{r warning=FALSE}
+par(mfrow=c(2,2))
+plot(m6,id.n=0)
+```
+
+-   *The variance inflation factor (VIF) values for the variables in the model (m6) indicate potential issues with multicollinearity. Variables like 'mileage,' 'year,' 'engineSize,' and 'mpg' show moderate VIF values, suggesting some correlation with other predictors. However, the 'model' variable has a high VIF of 5.41, indicating a substantial level of multicollinearity with other categorical variables.*
+
+```{r}
+vif(m6)
+```
+
+-   *Given the high VIF for the 'model' variable, it is influencing the effects plot in an unexpected way due to multicollinearity.*
+
+```{r}
+plot(allEffects(m6))
+
+```
+
+-   *m6 exhibits a negative and lowest AIC, indicating a potential improvement in model fit compared to others. This suggests that the inclusion of variables or transformations in m6 have enhanced its performance.*
+
+```{r}
+AIC(m0,m1,m2,m3,m4,m5,m6)
+```
+
+-   *Each predictor, including mileage, year, engine size, mpg, model, and transmission, exhibits highly significant p-values (\< 2.2e-16), indicating their substantial impact on the target variable. The residuals also have a low mean square value, suggesting good model fit. The model's overall significance is confirmed by a notable F value. The 'model' variable and 'transmission' both contribute significantly to explaining the variation in log-transformed price. The residuals have a small mean square value, indicating an effective fit.*
+
+```{r warning=FALSE}
+anova(m6)
+```
+
+*Can adding other categorical variables improve our model?*
+
+-   *The remaining categorical variables have a very low R-squared value in relation to the price, suggesting that they do not significantly contribute to explaining the variability in car prices. Therefore, adding these variables is unlikely to enhance the model's predictive power regarding price variations.*
+
+### *11.5.3 Interactions*
+
+-   *Constructing the following model will reveal which potential interactions play a significant role in explaining the variability. Interactions with lower AIC values indicate greater efficiency in contributing to the model.*
+
+-   *In this case, the candidates are: `model:transmission` and `mileage:model`.*
+
+```{r}
+mt<-lm(log(price)~(mileage+year+engineSize+mpg +  model + transmission)*(mileage+year+engineSize+mpg +  model + transmission),data=df)
+```
+
+```{r}
+mt<-step(mt)
+
+```
+
+#### *11.5.3.1 Interaction between two factors*
+
+-   *Interactions enhance models by capturing nuanced relationships between variables, allowing for non-additive effects. Inclusion of interaction terms, such as between the two most significant factors, `model` and `transmission`, enables better representation of complex dependencies, improving predictive accuracy and overall model fit. This allows the model to capture nuanced relationships that may be missed by considering these predictors individually.*
+
+```{r}
+m7<-lm(log(price)~mileage+year+engineSize+mpg + model + transmission + model*transmission,data=df)
+summary(m7) 
+```
+
+-   *Despite achieving a 91% explained variability, enhanced homoscedasticity, and improved normality after the interaction addition, lower quantiles in residuals still deviate from normal distribution. While the overall distribution appears linear, influential data points impact the regression, and there's noticeable leverage.*
+
+```{r warning=FALSE}
+par(mfrow=c(2,2))
+plot(m7,id.n=0)
+```
+
+#### *11.5.3.2 Interaction between one factors and one covariate*
+
+-   *Pairing a crucial factor with a relevant covariate in model interaction uncovers nuanced relationships, providing deeper insights into their joint impact on the outcome.*
+
+-   *This model offered the maximum variability till now.*
+
+```{r}
+library(MASS)
+m8<-lm(log(price) ~ mileage+year+engineSize+mpg+model + transmission + model*transmission + mileage*transmission,data=df)
+summary(m8) 
+```
+
+```{r warning=FALSE}
+par(mfrow=c(2,2))
+plot(m8,id.n=0)
+```
+
+-   *The shape of the marginal models closely mirrors the underlying data, and the fitted values reveal a more robust model. The convergence of the blue and red datasets, along with their alignment with the same underlying function, underscores a compelling consistency between observed and predicted outcomes.*
+
+```{r warning=FALSE}
+marginalModelPlots(m8)
+```
+
+-   *Which model is better?*
+
+-   *Model m8 is preferred over m7 as it has a lower AIC, suggesting a better balance between goodness of fit and model complexity.*
+
+```{r}
+AIC(m7,m8)
+```
+
+```{r}
+anova(m7,m8)
+```
+
+## *11.6 Model Validation & Unusual-Influential Data Detection*
+
+-   *We will employ the Breusch-Pagan test to evaluate **homoscedasticity**. Since the p-value associated with the test is significantly low, we can reject the null hypothesis of heteroscedasticity. Consequently, this leads us to conclude that the model exhibits homoscedasticity, suggesting that the variance of the residuals is consistent across all levels of the explanatory variables.*
+
+```{r}
+library(lmtest) 
+bptest(m8)
+```
+
+-   *The residual plots for the regression model suggest a good fit. Residuals for mileage, year, mpg, car model, and transmission type are randomly spread, indicating these variables are well accounted for in the model.*
+
+-   *The lack of clear patterns or systematic trends in these plots suggests that the assumption of **independence** is met.*
+
+```{r}
+residualPlots(m8,id=list(method=cooks.distance(m8),n=10)) 
+```
+
+-   Let's proceed to display the boxplots of the R-student values, Hat values, and Cook's distances for the observations in the model.
+
+```{r}
+par(mfrow=c(1,3)) 
+Boxplot(abs(rstudent(m8)),id=list(labels=row.names(df))) 
+Boxplot(abs(hatvalues(m8)),id=list(labels=row.names(df))) 
+Boxplot(cooks.distance(m8),id=list(labels=row.names(df)))
+```
+
+```{r}
+stu <- which(abs(rstudent(m8))>3.0) 
+cook <- which(abs(cooks.distance(m8))>0.1) 
+hat <- which(abs(hatvalues(m8))>0.1) 
+outs<-unique(stu,cook,hat)
+```
+
+-   *Spotting influential individuals:*
+
+```{r}
+x<-influencePlot( m8, id=c(list="noteworthy",n=5)) 
+obs<-rownames(x) 
+outs<-unique(outs,obs)  
+df_outs<-df[-outs,]
+```
+
+-   Building a model without unusual and influential data:
+
+```{r}
+m9<- update(m8, data=df_outs) 
+summary(m9)
+```
+
+-   The residuals of the model are relatively small, with a median very close to zero, indicating that the model's predictions are generally accurate.
+
+-   Many coefficients are not defined due to singularities, which often happens when there are categories with very low/null occurrence or when there's multicollinearity due to the interaction terms.
+
+-   The residual standard error is quite low, indicating a good fit. The model explains a substantial amount of variance, with a Multiple R-squared of 93,20% , suggesting a strong predictive power.
+
+```{r warning=FALSE}
+par(mfrow=c(2,2)) 
+plot(m9,id.n=0)
+```
+
+-   The diagnostic plots for model `m9` indicate a robust linear regression model. The Residuals vs Fitted plot shows a random distribution of points around the horizontal line, suggesting that the model's assumptions of linearity and homoscedasticity are met. The Q-Q Plot supports the assumption of normally distributed residualss. The Scale-Location plot's uniform spread indicates stable variance across predictions, reinforcing the model's homoscedastic nature. Lastly, the Residuals vs Leverage plot reveals no points with high leverage or significant Cook's distances, pointing to an absence of influential outliers. Collectively, these plots suggest that model `m9` is accepted and provides a good fit to the data.
+
+```{r}
+anova(m9)
+```
+
+-   The ANOVA for model m9 shows that all predictors, including mileage, year, engine size, mpg, model, transmission, and their interactions, are highly significant with p-values less than 0.05.
+
+-   Let's review and compare models `m8` and `m9` to decide which model is better suited for our analysis and then choose the one to move forward with. As we can see the best one is `m9`.
+
+```{r warning=FALSE}
+AIC(m9,m8)
+```
+
+# *12. Prediction model for binary target "Audi":*
+
+-   *In the subsequent section of the assignment, our focus shifts to constructing a predictive model for the binary variable 'Audi.' The goal is to develop a model that enables us to estimate the likelihood of a given set of input data being associated with an Audi car or not.*
+
+```{r}
+set.seed(1998)
+
+#df<-intial_data[-mouts,]
+x <- sample(1:nrow(df),round(0.70*nrow(df),0))
+
+train <- df[x,]
+test <-df[-x,]
+```
+
+-   *Based on the results based on the following analysis using the `catdes` function, the variables `mpg`, `price`, `tax`, and `year` exhibit statistically significant relationships with the target variable. Therefore, these variables may be considered as potential predictors for the initial binary classification model.*
+
+```{r warning=FALSE}
+res.cat <- catdes(df, num.var = which(names(df)=="Audi"))
+res.cat$quanti.var
+
+```
+
+## *12.1 Initial model*
+
+-   *Based on the MCA and previous results, we will be proceeding to choose the suitable variables and built the initial model:*
+
+```{r}
+b1<-glm(Audi~mpg+tax+year,family="binomial",data=train)
+summary(b1)
+```
+
+-   *The model (b1) examines how mpg, tax, and year affect the likelihood of the outcome variable "Audi." The results show that mpg and year significantly influence the odds of the event, with higher mpg and later years associated with certain outcomes. However, the tax variable doesn't have a significant impact. The model fits the data reasonably well, as indicated by the deviance values, and the AIC is 3353, suggesting a decent overall model quality.*
+
+-   *As these VIF values are all close to 1, suggesting that there is no severe multicollinearity among the predictor variables in the model.*
+
+```{r}
+vif(b1)
+```
+
+-   *Again, `mpg` and `year` are valuable predictors in this model, while `tax` does not appear to play a statistically significant role.*
+
+```{r}
+Anova(b1)
+
+```
+
+-   *At this stage, the residual plots show that the variance of the residuals is not constant, which violates the assumption of homoscedasticity.*
+
+```{r}
+residualPlots(b1)
+```
+
+-   *As tax didn't show much influence, we could try to remove it and built a simpler model:*
+
+```{r}
+b2<-glm(Audi~mpg+year,family="binomial"(link = logit),data=train)
+summary(b2)
+```
+
+-   *As we can see the AIC value didn't change much.*
+
+```{r}
+AIC(b1,b2)
+```
+
+-   *While examining the AIC values, it is evident that the inclusion of the variable 'tax has not substantially altered the model. The marginal change in the AIC suggests that this variable may not play a significant role in shaping the model. 'tax' may be perturbing the model without significantly enhancing its overall performance.*
+
+```{r}
+anova(b1,b2)
+
+```
+
+-   *The residual plots further support the decision to exclude the 'tax' variable from the model. Without 'tax,' the residual graphs exhibit improved characteristics, demonstrating reduced dispersion and less heteroscedastic behavior. This shows better improvement compared to the previous one. The residual plots show a weaker non-linear relationship between the residuals and the fitted values, and the variance of the residuals appears to be more constant.*
+
+```{r}
+residualPlots(b2)
+```
+
+-   *How this model works?*
+
+    -   *The following plots illustrate the probability of a car being an `Audi` based on its `mpg` and `year` values. Notably, a discernible trend emerges: as `mpg` increases, the likelihood of the car being an `Audi` diminishes. Additionally, the passage of time (More recent years) is associated with a decreasing probability of the car being identified as an Audi.*
+
+```{r}
+plot(allEffects(b2))
+```
+
+-   *Even though we will chose the second model, some marginal model plots for `b2` reveal a noticeable lack of overlap between the observed data and the model predictions, indicating a potential need for model refinement or consideration of additional factors.*
+
+```{r warning=FALSE}
+marginalModelPlots(b2)
+```
+
+## *12.2 Adding factors*
+
+-   *Adding new factors based on MCA analysis and the following results maybe enhance our model. We won't take into consideration `f.mpg` as it is derivated from `mpg` so the best candidates are: `f.engineSize`, `fuelType` and `transmission`.*
+-   Obviously model and manufacturer won't be added as "Audi" is derivated from them.
+
+```{r warning=FALSE}
+catdes(df,17)$test.chi2
+```
+
+-   *Let's add them and build a new model:*
+
+```{r}
+b3<-glm(Audi~mpg+year+f.engineSize+fuelType+transmission,family="binomial",data=train)
+summary(b3)
+```
+
+-   *The model b3 suggests again that cars with lower 'mpg' and older 'year' are less likely to be Audi. Additionally, factors such as 'f.engineSizeLarge,' 'fuelTypeHybrid,' 'transmissionf.Trans-SemiAuto,' and 'transmissionf.Trans-Automatic' influence the likelihood.*
+
+-   *The model fits reasonably well, demonstrating a reduction in deviance from the previous model, with an AIC of 3246.*
+
+-   *No evidence of collinearity is observed among the predictor variables in the model, indicating that they can independently contribute to explaining the variance in the response variable.*
+
+```{r}
+vif(b3)
+```
+
+-   *The marginal model plot of the linear predictor for `b3` reveal a noticeable improvement of overlap between the observed data and the model predictions, indicating a potential prigress for model refinement after including new factors.*
+
+```{r warning=FALSE}
+marginalModelPlots(b3)
+```
+
+-   All variables are significant for the target.
+
+```{r}
+Anova(b3)
+```
+
+-   Overall, the residual plots show that the model is not perfectly fitting the data. There are some patterns in the residuals that suggest that the model could be improved.
+
+```{r}
+residualPlots(b3)
+```
+
+## *12.3 Adding Interactions*
+
+-   *We will build a test model with all the possible interactions to see which are the most contribuitng to out model.*
+
+-   *Based on Anova results, we can see that the best interactions to consider are `mpg*f.engineSize` and `f.engineSize*fuelType`.*
+
+```{r warning=FALSE}
+b_test<-glm(Audi~(mpg+year+f.engineSize+fuelType+transmission)*(f.engineSize+fuelType+transmission),family="binomial",data=train)
+Anova(b_test)
+```
+
+-   *We can see that `fuelType` does not play a significant role due to to high p-value when it interacts with some variables. So we will remove it to shape a new model.*
+
+-   *Also, this test model summary indicate coefficients that could not be estimated due to collinearity, something that we will check in further steps.*
+
+### *12.3.1 Interaction between covariates and factors*
+
+-   *Let's build a model without `fuelType`'s interactions and the strongest possible covariate-factor interactions:*
+
+```{r}
+b4 <- glm(Audi~(mpg+year+ fuelType +f.engineSize+transmission) + (mpg+year)*(f.engineSize+transmission),family="binomial",data=train)
+summary(b4)
+```
+
+-   *Let's check for any possibile collinearity.*
+
+-   *As we can see all the interaction have high GVIF values, higher than 5, so it makes it not acceptable and it is an evidence of high multicollineairity.*
+
+-   *To solve this we will keep one suitable interaction.*
+
+```{r message=TRUE, warning=FALSE}
+vif(b4)
+```
+
+```{r}
+b5 <- glm(Audi~(mpg+year+fuelType + f.engineSize+transmission + mpg*transmission ),family="binomial",data=train)
+summary(b5)
+```
+
+```{r}
+vif(b5)
+```
+
+-   *Now, all VIF/GVIF values are under 5. So no present collinearity.*
+
+*Let's compare this model with the model without interactions:*
+
+```{r}
+anova(b3,b5)
+```
+
+-   *The lower AIC value in this model compared to the previous one suggests that the added interaction enhances the model's overall fit*
+
+### *12.3.2 Interaction between two factors*
+
+-   *The addition of this new interaction has once again lowered the AIC values, providing evidence of further improvement in the model.*
+
+```{r}
+b6 <- glm(Audi~(mpg+year+fuelType +f.engineSize+transmission + mpg*transmission + transmission*f.engineSize),family="binomial", data=train)
+summary(b6)
+```
+
+-   *Interaction terms inherently complicate the multicollinearity assessment because they represent the combined effect of two used variables, potentially correlating with their individual main effects.*
+
+```{r warning=FALSE}
+vif(b6, type = 'predictor')
+```
+
+-   *Adding the interaction between `transmission` and `f.engineSize` to the model significantly improves the fit, as indicated by the decrease in residual deviance and the highly significant p-value.*
+
+```{r warning=FALSE}
+anova(b5,b6, test="LR")
+```
+
+-   Residuals look much better than the previous model's one.
+
+```{r}
+residualPlots(b6)
+```
+
+## *12.4 Diagnosis & Unusual-Influential Data Detection*
+
+-   *Till now, we built a model predicting the likelihood of a car being an Audi based on factors like mpg, year, engine size category, fuel type, and transmission, including some interactions between these variables. Most variables do significantly influence the prediction, except for few. Possible due to lack of cars with these characteristics in our train dataset. Still, this model seems to have some predictive power.*
+
+```{r}
+summary(b6)
+```
+
+```{r}
+Anova(b6)
+```
+
+-   *Identifying observations with high leverage, which are those that are unusual or distinct from the rest of the data in terms of the predictor values.*
+
+```{r}
+par(mfrow=c(1,3))
+Boxplot(hatvalues(b6),id=c(labels=row.names(train)))
+Boxplot(abs(rstudent(b6)),id=c(labels=row.names(train)))
+Boxplot(cooks.distance(b6),id=c(labels=row.names(train)))
+
+```
+
+-   *These diagnostic plots are crucial for regression analysis as they help in identifying observations that might be unduly influencing the model, either through high leverage, large influence on the model's predictions, or being outliers in terms of the response variable.*
+-   *Let's remove them and shape our model:*
+
+```{r}
+out1 <- which(abs(rstudent(b6))>1.7);
+out2 <- which(abs(cooks.distance(b6))>0.003);
+out3 <- which(abs(hatvalues(b6))>0.03);
+outs<-unique(c(out1,out2,out3))
+```
+
+-   *Influence plot can helps us identify outliers, influential data points, or observations that have a large impact on the model's coefficients.*
+
+-   *We can observe how certain points stand out noticeably from the clusters formed, with some exerting significant influence.*
+
+```{r}
+par(mfrow=c(1,1));
+outs2 <- influencePlot(b6, id=c(labels=row.names(train)));
+outs2 <- labels(outs2)[[1]];
+outs2 <- as.numeric(outs2);
+outs<-unique(outs,outs2)
+```
+
+```{r}
+b7<-update(b6, data = train[-outs,])
+summary(b7)
+```
+
+-   *The updated regression model `b7` shows improved statistical significance and model fit following the removal of influential observations. This is evident from the reduced AIC and deviances, indicating a better model representation of the underlying data relationship. Significant variables such as 'mpg' and 'year' demonstrate the model's enhanced predictiveness after excluding outliers.*
+
+-   Overall, the residuals are better clustered around the zero line than the previous model where points were more scattered, so it is a good indication. We can see that some variables still have some outliers, so we will make a diagnosis to check if they are significant.
+
+```{r}
+residualPlots(b7)
+```
+
+-   This suggests that there are no significant outliers in the model based on the Bonferroni-adjusted p-values.
+
+```{r}
+outlierTest(b7)
+```
+
+-   *Some regions in the model predictions align closely with the data, there are discrepancies in others. This implies that while the model may capture the overall trend, there could be room for refinement to improve its accuracy in certain areas.*
+
+```{r warning=FALSE}
+marginalModelPlots(b7)
+```
+
+## *12.5 Predictive Power & Quality of Fit*
+
+-   *Let's take a look over the final model that we built.*
+
+```{r}
+Anova(b7)
+```
+
+-   *Every variable and interaction term has a highly significant p-value (p \< 0.001 for all), which suggests that they all have a statistically significant effect on the response variable. The presence of very low p-values (especially those less than 2.2e-16) suggests that the model has a good fit in terms of the statistical significance of the predictors.*
+
+-   *We verify the quality of the fit based on the deviance for `b6` (including influential data) and `b7` (excluding influential data).*
+
+```{r}
+1-pchisq(b6$deviance, b6$df.residual)
+1-pchisq(b7$deviance, b7$df.residual)
+
+```
+
+-   *Given that model **`b6`** includes influential data points and model **`b7`** excludes them, the p-values can tell us something about the impact of these points on the model fit. The high p-value of 0.9711 for model **`b6`** suggests that even with the influential data included, the model appears to fit the data well; however, the presence of these points might not be dramatically affecting the overall fit.*
+
+-   *For model **`b7`**, the perfect p-value of 1 after excluding influential data may indicate that the model fits the non-influential data exceptionally well, which could be interpreted as the influential data having had a distorting effect on the model.*
+
+-   *Below, we can see Pearson's chi-squared test statistic for model `b7` and `b6` and then computing the corresponding p-value to assess the goodness of fit of the model. A high p-value suggests that the model has a good fit to the observed data.*
+
+```{r}
+X2_b7 <- sum((resid(b7, "pearson")^2))
+1-pchisq( X2_b7, b7$df.res)
+
+X2_b6 <- sum((resid(b6, "pearson")^2))
+1-pchisq( X2_b6, b6$df.res)
+
+
+```
+
+-   *Using the Hosmer-Lemeshow test helps check if our model's predictions match up with actual data, telling us if the fit is good. Even though it tells that the model isn't good, we will rely on other tests and diagnostics.*
+
+```{r warning=FALSE}
+library(ResourceSelection)
+library(ROCR)
+test$fuelType <- factor(test$fuelType, levels = levels(b6$model$fuelType))
+ll <- which( is.finite(test$fuelType) )
+
+pred_test <- predict(b6, newdata=test[ll,], type="response")
+ht <- hoslem.test(as.numeric(test$Audi[ll])-1, pred_test)
+ht
+
+```
+
+-   This indicates that there is not enough evidence to reject the null hypothesis of the test, which states that the model's predictions are not significantly different from the actual values --- in other words, the model fits well.
+
+```{r}
+pred <- prediction(pred_test, test$Audi[ll])
+perf <- performance(pred,measure="tpr",x.measure="fpr")
+plot(perf,colorize=TRUE,type="l")
+abline(a=0,b=1)
+# Área bajo la curva
+AUC <- performance(pred,measure="auc")
+AUCaltura <- AUC@y.values
+# Punto de corte óptimo
+cost.perf <- performance(pred, measure ="cost")
+opt.cut <- pred@cutoffs[[1]][which.min(cost.perf@y.values[[1]])]
+#coordenadas del punto de corte óptimo
+x<-perf@x.values[[1]][which.min(cost.perf@y.values[[1]])]
+y<-perf@y.values[[1]][which.min(cost.perf@y.values[[1]])]
+points(x,y, pch=20, col="red")
+
+```
+
+-   *In our plot, the curve is above the line of no discrimination, which suggests that the model has a good ability to distinguish between the positive class and the negative class, suggests a model that outperforms random guessing, as evidenced by the blue line's ascent above the diagonal line of no discrimination.*
+
+-   *While the curve does not hug the upper left corner, which would indicate a perfect model, it still shows a good balance between sensitivity and the ability to avoid false alarms, implying a reasonable level of accuracy.*
+
+-   *Overall, the plot indicates a model that is statistically useful.*
+
+-   *An AUC score of 0.64 indicates that your model has fair discriminative ability to distinguish between the positive and negative classes. While not indicative of a strong predictive model, this level of AUC suggests that the model performs better than random chance.*
+
+```{r}
+AUC <- performance(pred,measure="auc")
+AUCaltura <- AUC@y.values
+cat("AUC:", AUCaltura[[1]])
+
+```
+
+## *12.6 Confusion matrix*
+
+```{r}
+audi.est <- ifelse(pred_test<0.4,0,1)
+tt<-table(audi.est,test$Audi[ll])
+tt
+```
+
+-   ***What percentage of the model's predictions were correct?***
+
+```{r}
+100*sum(diag(tt))/sum(tt)
+```
+
+-   ***How accurate the model's positive predictions are?***
+
+-   *28.6% means that when the model predicts an instance as positive, about 28.6% of these predictions are correct, and the rest are false positives.*
+
+```{r}
+100*(tt[2,2]/(tt[2,1]+ tt[2,2])) 
+```
+
+-   ***Evaluating the binary classification model:***
+
+```{r}
+prob.audi <- b6$fit[ll]
+audi.est <- ifelse(prob.audi<0.5,0,1)
+tt<-table(audi.est,df$Audi[ll]);tt
+```
+
+-   *The model appears to have a high number of True Negatives and a low number of True Positives, suggesting it is better at identifying 'No Audi' than 'Audi Yes'. This could very well be related to an imbalance in the dataset, where there are far fewer 'Audi' cars compared to 'No Audi' cars.*
+
+-   ***How well the model is at correctly identifying negative instances?***
+
+-   *A rate of 79.21% True Negatives suggests that the model is quite effective at correctly identifying instances of the negative class. It indicates a strong ability of the model to recognize situations where the condition it's trying to predict is absent.*
+
+```{r}
+100*tt[1,1]/sum(tt)
+```
+
+-   ***How well the model is at correctly identifying positive instances?***
+
+-   *The precision of 14.29% indicates that the model's ability to correctly identify positive instances is limited, and a significant number of its positive predictions are actually false positives.*
+
+```{r}
+100*(tt[2,2]/(tt[2,1]+ tt[2,2]))
+```
