@@ -17,7 +17,7 @@ Aim is to predict how much you should sell your old car. It involves a numeric o
 ### Final Conclusions:
 
 - **[Final Document:](https://github.com/Aerosophia/ADEI-FIB/blob/main/Final/SoukainaMahboubMehboub-DelFinalRmd.pdf )** This document englobes all the steps from initial data exploratory analysis to model building with more details.
-- **[Final Presentation Slides:](https://github.com/Aerosophia/ADEI-FIB/blob/main/Final/CaseStudy-Presentation.pptx "Final Presentation Slides:") ** Case Study conclusions - PPT file.
+- **[Final Presentation Slides:](https://github.com/Aerosophia/ADEI-FIB/blob/main/Final/CaseStudy-Presentation.pptx "Final Presentation Slides:")** Case Study conclusions - PPT file.
 
 **Credits: ** Soukaïna Mahboub Mehboub  (@Aerosophia)
 **Contact:** soukaina.mahboub@estudiantat.upc.edu
