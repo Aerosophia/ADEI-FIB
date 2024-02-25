@@ -22,4 +22,4 @@ Aim is to predict how much you should sell your old car. It involves a numeric o
 **Credits:** Soukaïna Mahboub Mehboub  (@Aerosophia)
 **Contact:** soukaina.mahboub@estudiantat.upc.edu
 
-**Note: All these projects have been rated  between 8 and 10 by professors**
+**Note: All these projects have been rated  between 7 and 9 by professors**
